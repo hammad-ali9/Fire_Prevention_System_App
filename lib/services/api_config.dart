@@ -65,11 +65,11 @@ class ApiConfig {
 
   // API Key 1 — used for read (query) operations.
   static const String tgApiKey =
-      '_iv0RqzAmkhwOtUx_0Vee9.IoP7Hddn5D0ypG4B21XoBnnEGV5Mg7iA3z5EafgCJ0Rg.1';
+      'FxjcoEI5hdIr5jRejVx-M9.JBcqsxV5n5F1Rn4Mj3h8yONvqp0rtKaZSzMzapbX2p38.1';
 
   // API Key 2 — reserved for write / command operations.
   static const String tgApiKeyWrite =
-      'h9isPPJTujJGZb74jxtm2S.lyifC3CEdkmi037SpF0s43e561TvRNJvqg2RorD08wU8.2';
+      'AxL3skDV33RAkFQ_KqJ177.DRdfzdiHaQ-Zn0hoGR164jCuxyVIQG89i-PDMNHhTDia.2';
 
   // How often the app re-polls TG for device telemetry.
   static const Duration tgPollInterval = Duration(minutes: 1);

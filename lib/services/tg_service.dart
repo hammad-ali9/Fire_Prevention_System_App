@@ -187,7 +187,9 @@ class TGService {
     final asset = assets.firstWhere(
       (a) {
         final s = '${a['serialNumber'] ?? a['serial'] ?? a['SerialNumber'] ?? a['deviceSerial'] ?? ''}';
-        return s == serial;
+        // TG prepends a 3-letter org prefix to third-party device serials
+        // (e.g. "ABC1429272"). Match on suffix so both formats work.
+        return s == serial || s.endsWith(serial);
       },
       orElse: () => throw TGNotFoundException(
           'Device $serial not found in TG org ${_cachedOrgId!}. '
