@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "699348421681",
+    "project_id": "fireprevention-6d950",
+    "storage_bucket": "fireprevention-6d950.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:699348421681:android:e04dbf0e9a637bb3629910",
+        "android_client_info": {
+          "package_name": "com.example.fire_prevention"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "699348421681-8cch93iqpf5hgkr7q0t8dfhb601rm176.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fire_prevention",
+            "certificate_hash": "a3d6db2ade580ed4d926832b4aa2620f74d45b2e"
+          }
+        },
+        {
+          "client_id": "699348421681-7lqrsqhtiqale6ocs8ah3n9v5d5emgnk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBt3yOdEgNlalKXVEOyUp8h-EmSZNidGfc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "699348421681-7lqrsqhtiqale6ocs8ah3n9v5d5emgnk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "699348421681-4v62jnl8ml0fq31d1501vqopchvcb57p.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.firePrevention"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

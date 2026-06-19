@@ -1,0 +1,76 @@
+name: fire_prevention
+description: "Fire prevention monitoring app."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  http: ^1.2.2
+  geolocator: ^13.0.1
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.4
+  google_sign_in: ^6.2.2
+  shared_preferences: ^2.3.3
+  flutter_local_notifications: ^21.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/map.jpg
+
+  fonts:
+    - family: Glory
+      fonts:
+        - asset: assets/fonts/Glory-Thin.ttf
+          weight: 100
+        - asset: assets/fonts/Glory-ThinItalic.ttf
+          weight: 100
+          style: italic
+        - asset: assets/fonts/Glory-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Glory-ExtraLightItalic.ttf
+          weight: 200
+          style: italic
+        - asset: assets/fonts/Glory-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Glory-LightItalic.ttf
+          weight: 300
+          style: italic
+        - asset: assets/fonts/Glory-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Glory-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/Glory-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Glory-MediumItalic.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/Glory-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Glory-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/Glory-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Glory-BoldItalic.ttf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/Glory-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Glory-ExtraBoldItalic.ttf
+          weight: 800
+          style: italic
