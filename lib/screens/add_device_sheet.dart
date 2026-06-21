@@ -101,9 +101,9 @@ class _SheetState extends State<_Sheet> {
           : _CheckStatus.failed;
     });
 
-    // Step 1: Check API credentials — GET /v2/user/organisations
+    // Step 1: Check backend reachable (Firestore, signed-in user).
     try {
-      await TGService.instance.fetchOrganisations();
+      await TGService.instance.backendReachable();
       setState(() => _checkCredentials = _CheckStatus.passed);
     } on TGAuthException {
       setState(() {
@@ -120,10 +120,10 @@ class _SheetState extends State<_Sheet> {
       return;
     }
 
-    // Step 2: Check asset exists — GET /v3/assets/{orgId}, find serial
+    // Step 2: Check telemetry exists for this serial in Firestore.
     try {
       final serial = _serialCtrl.text.trim();
-      await TGService.instance.fetchTelemetry(serial);
+      await TGService.instance.fetchTelemetryOnce(serial);
       setState(() => _checkAsset = _CheckStatus.passed);
     } on TGNotFoundException {
       setState(() => _checkAsset = _CheckStatus.failed);

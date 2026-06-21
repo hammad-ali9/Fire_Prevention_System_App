@@ -8,23 +8,30 @@ import 'package:http/http.dart' as http;
 import '../models/tg_telemetry.dart';
 import 'api_config.dart';
 
-/// Telematics Guru (TG) EMEA03 client.
+/// Device telemetry client — Digital Matter **Device Manager API** (direct).
 ///
-/// API flow confirmed from Digital Matter official docs:
-///   1. GET /v2/user/organisations    → resolve numeric org ID
-///   2. GET /v3/assets/{orgId}        → list assets, find by serial number
-///   3. Parse asset JSON into TGTelemetry for the UI
+/// The app polls the DM (OEM Server) API straight from the device, no backend:
 ///
-/// Auth: `Authorization: Bearer {apiKey}` — API key used directly as token.
+///   GET {dmBaseUrl}/v1/TrackingDevice/Get?product={productId}&id={serial}
+///   Auth: `Authorization: Bearer {ApiConfig.dmApiKey}`
 ///
-/// PRODUCTION NOTE: Move [ApiConfig.tgApiKey] to a Firebase Cloud Function
-/// to avoid shipping credentials in the app binary.
+/// What this path delivers (verified against the live device):
+///   • last-known position (lat/long), GPS/comms timestamps, online state.
+///
+/// What it CANNOT deliver (not exposed by any DM endpoint — lives in Telematics
+/// Guru): valve/relay state, battery voltage, analogues. Those fields stay null
+/// here. Valve CONTROL is likewise unavailable via a simple call (DM only has
+/// the low-level `AsyncMessaging/Send`, which needs a per-product message spec),
+/// so [setSprinkler] is a no-op that reports failure until a TG key is wired.
+///
+/// The class name + public surface are kept identical to the previous
+/// implementations so [DeviceStore] and the screens need no changes.
 class TGService {
   TGService._({http.Client? client}) : _client = client ?? http.Client();
 
   static final TGService instance = TGService._();
 
-  /// Creates an isolated instance with an injected [client] — use in tests only.
+  /// Creates an isolated instance with an injected [client] — tests only.
   factory TGService.forTest(http.Client client) => TGService._(client: client);
 
   final http.Client _client;
@@ -35,16 +42,12 @@ class TGService {
   // serial → polling timer
   final Map<String, Timer> _timers = {};
 
-  // Cached org ID — resolved once per session to avoid repeated org lookups.
-  int? _cachedOrgId;
-
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer ${ApiConfig.tgApiKey}',
+        'Authorization': 'Bearer ${ApiConfig.dmApiKey}',
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
       };
 
-  // ── Public watch API ─────────────────────────────────────────────────────
+  // ── Public watch API ───────────────────────────────────────────────────────
 
   /// Returns the [ValueNotifier] for [serial], starting polling if needed.
   ValueNotifier<TGTelemetry?> watch(String serial) {
@@ -61,18 +64,18 @@ class TGService {
     _notifiers.remove(serial)?.dispose();
   }
 
-  // ── Polling internals ─────────────────────────────────────────────────────
+  // ── Polling internals ───────────────────────────────────────────────────────
 
   void _startPolling(String serial) {
     _fetch(serial); // immediate first fetch
-    _timers[serial] = Timer.periodic(ApiConfig.tgPollInterval, (_) {
+    _timers[serial] = Timer.periodic(ApiConfig.dmPollInterval, (_) {
       _fetch(serial);
     });
   }
 
   Future<void> _fetch(String serial) async {
     try {
-      final telemetry = await fetchTelemetry(serial);
+      final telemetry = await fetchTelemetryOnce(serial);
       if (_notifiers.containsKey(serial)) {
         _notifiers[serial]!.value = telemetry;
       }
@@ -81,158 +84,159 @@ class TGService {
     }
   }
 
-  // ── Public API methods ────────────────────────────────────────────────────
+  // ── One-shot reads ──────────────────────────────────────────────────────────
 
-  /// Step 1: Get list of organisations this API key has access to.
-  ///
-  /// Endpoint: GET /v2/user/organisations
-  /// Use this to validate credentials AND to resolve the numeric org ID.
-  Future<List<Map<String, dynamic>>> fetchOrganisations() async {
-    final uri = Uri.parse('${ApiConfig.tgBaseUrl}/v2/user/organisations');
-
-    final response = await _client
+  /// True if the DM API is reachable and the key authenticates.
+  /// Throws [TGAuthException] on 401/403, [TGApiException] otherwise.
+  Future<bool> backendReachable() async {
+    final uri =
+        Uri.parse('${ApiConfig.dmBaseUrl}/v1/TrackingDevice/GetDeviceList');
+    final resp = await _client
         .get(uri, headers: _headers)
         .timeout(const Duration(seconds: 15));
-
-    dev.log(
-      '[TGService] GET $uri → ${response.statusCode}',
-      name: 'TGService',
-    );
-
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      if (body is List) return body.cast<Map<String, dynamic>>();
-      // Some TG versions wrap list in { "data": [...] }
-      if (body is Map && body.containsKey('data')) {
-        return (body['data'] as List).cast<Map<String, dynamic>>();
-      }
-      return [];
-    }
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    if (resp.statusCode == 200) return true;
+    if (resp.statusCode == 401 || resp.statusCode == 403) {
       throw TGAuthException(
-          'TG API auth failed (${response.statusCode}). Check API key.');
+          'Device Manager auth failed (${resp.statusCode}). Check the API key.');
     }
-
-    throw TGApiException(
-        'TG API error ${response.statusCode}: ${response.body}');
+    throw TGApiException('Device Manager error ${resp.statusCode}.');
   }
 
-  /// Step 2: Get all assets for [orgId].
+  /// Fetches the latest telemetry for [serial] from the DM API.
   ///
-  /// Endpoint: GET /v3/assets/{orgId}
-  /// Returns every asset in the org including last known position and status.
-  Future<List<Map<String, dynamic>>> fetchAssets(int orgId) async {
-    final uri = Uri.parse('${ApiConfig.tgBaseUrl}/v3/assets/$orgId');
-
-    final response = await _client
-        .get(uri, headers: _headers)
-        .timeout(const Duration(seconds: 15));
-
-    dev.log(
-      '[TGService] GET $uri → ${response.statusCode}',
-      name: 'TGService',
-    );
-
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      if (body is List) return body.cast<Map<String, dynamic>>();
-      if (body is Map && body.containsKey('data')) {
-        return (body['data'] as List).cast<Map<String, dynamic>>();
-      }
-      return [];
-    }
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw TGAuthException(
-          'TG API auth failed (${response.statusCode}). Check API key.');
-    }
-
-    throw TGApiException(
-        'TG API error ${response.statusCode}: ${response.body}');
-  }
-
-  /// Fetches the latest telemetry for [serial] from TG EMEA03.
-  ///
-  /// Flow:
-  ///   1. Fetch organisations → resolve org ID (cached after first call).
-  ///   2. Fetch assets for that org → find asset with matching serial.
-  ///   3. Parse asset JSON into [TGTelemetry].
-  Future<TGTelemetry> fetchTelemetry(String serial) async {
-    // Resolve org ID once per session
-    if (_cachedOrgId == null) {
-      final orgs = await fetchOrganisations();
-      if (orgs.isEmpty) {
-        throw TGApiException(
-            'No organisations found for this API key. '
-            'Confirm Key 1 belongs to the Datanet IoT account.');
-      }
-      // Prefer "Datanet IoT" org; fall back to the first available org
-      final org = orgs.firstWhere(
-        (o) {
-          final name = (o['name'] as String? ?? '').toLowerCase();
-          return name.contains('datanet') || name.contains('iot');
-        },
-        orElse: () => orgs.first,
-      );
-      _cachedOrgId = (org['id'] as num).toInt();
-      dev.log(
-        '[TGService] resolved org "${org['name']}" → id $_cachedOrgId',
-        name: 'TGService',
-      );
-    }
-
-    final assets = await fetchAssets(_cachedOrgId!);
-
-    final asset = assets.firstWhere(
-      (a) {
-        final s = '${a['serialNumber'] ?? a['serial'] ?? a['SerialNumber'] ?? a['deviceSerial'] ?? ''}';
-        // TG prepends a 3-letter org prefix to third-party device serials
-        // (e.g. "ABC1429272"). Match on suffix so both formats work.
-        return s == serial || s.endsWith(serial);
-      },
-      orElse: () => throw TGNotFoundException(
-          'Device $serial not found in TG org ${_cachedOrgId!}. '
-          'Ask the client to confirm the device is registered in TG EMEA03.'),
-    );
-
-    return TGTelemetry.fromJson(serial, asset);
-  }
-
-  /// Sends a sprinkler ON/OFF command via TG API Key 2 (write credentials).
-  ///
-  /// Exact command endpoint and payload need confirmation from Digital Matter
-  /// support — the command API varies by device firmware version.
-  Future<bool> setSprinkler(String serial, {required bool active}) async {
-    // Ensure org ID is resolved before sending a command
-    if (_cachedOrgId == null) await fetchTelemetry(serial);
-
+  /// Endpoint: GET /v1/TrackingDevice/Get?product={productId}&id={serial}
+  Future<TGTelemetry> fetchTelemetryOnce(
+    String serial, {
+    int? productId,
+  }) async {
+    final product = productId ?? ApiConfig.dmDefaultProductId;
     final uri = Uri.parse(
-      '${ApiConfig.tgBaseUrl}/v2/${_cachedOrgId!}/asset/$serial/command',
+      '${ApiConfig.dmBaseUrl}/v1/TrackingDevice/Get'
+      '?product=$product&id=$serial',
     );
 
-    final response = await _client
+    final resp = await _client
+        .get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 15));
+
+    dev.log('[TGService] GET $uri → ${resp.statusCode}', name: 'TGService');
+
+    if (resp.statusCode == 200) {
+      final body = jsonDecode(resp.body);
+      if (body is Map<String, dynamic>) return _mapDevice(serial, body);
+      throw TGApiException('Unexpected DM response shape for $serial.');
+    }
+    if (resp.statusCode == 401 || resp.statusCode == 403) {
+      throw TGAuthException(
+          'Device Manager auth failed (${resp.statusCode}). Check the API key.');
+    }
+    if (resp.statusCode == 404) {
+      throw TGNotFoundException(
+          'Device $serial not found on the Device Manager account '
+          '(product $product). Confirm the serial and that this key can see it.');
+    }
+    throw TGApiException(
+        'Device Manager error ${resp.statusCode}: ${resp.body}');
+  }
+
+  /// Maps a DM `TrackingDevice/Get` response → [TGTelemetry].
+  ///
+  /// Only position + timestamps + online are available from this API; the
+  /// valve/battery/flow fields are intentionally null (see class docs).
+  TGTelemetry _mapDevice(String serial, Map<String, dynamic> d) {
+    final lastSeen = _parseUtc(
+      d['LastCommsUTC'] ?? d['LastGpsUpdateUtc'] ?? d['LastCommitSuccessUTC'],
+    );
+    final isOnline = lastSeen != null &&
+        DateTime.now().difference(lastSeen) < TGTelemetry.onlineThreshold;
+
+    return TGTelemetry(
+      serial: serial,
+      isOnline: isOnline,
+      lastSeen: lastSeen,
+      latitude: _toDouble(d['LastPositionLatitude']),
+      longitude: _toDouble(d['LastPositionLongitude']),
+      // Not available via the Device Manager API (TG-only):
+      sprinklerActive: null,
+      waterFlowRate: null,
+      batteryVoltage: null,
+      assetName: null,
+      raw: d,
+    );
+  }
+
+  // ── Commands ────────────────────────────────────────────────────────────────
+
+  /// Valve ON/OFF via the Device Manager async "Set Digital Output" message
+  /// (MessageType 0x004). The Arrow Global has a single switched-ground output
+  /// (harness Wire 6) = output index 0, so the valve relay is bit b0.
+  ///
+  /// Payload (4 bytes) = [LogicalLevel UINT16 LE][ChangeMask UINT16 LE], sent
+  /// base64-encoded in `Data`:
+  ///   ON  → level bit set,   mask = this output's bit
+  ///   OFF → level bit clear, mask = this output's bit
+  ///
+  /// ⚠️ NOT YET VERIFIED ON HARDWARE. The DM doc's own byte-order example is
+  /// self-contradictory, and the logical→physical polarity depends on the
+  /// device's active-high system parameter — so ON might map to valve-closed
+  /// until confirmed. DM also cannot read the output back, so verify the actual
+  /// valve change in the Telematics Guru portal after sending. The device must
+  /// be ONLINE; otherwise the command queues until [ExpiryDateUTC] (24h here).
+  Future<bool> setSprinkler(String serial, {required bool active}) async {
+    final data = _setOutputData(on: active, outputIndex: _valveOutputIndex);
+    final uri = Uri.parse(
+      '${ApiConfig.dmBaseUrl}/v1/AsyncMessaging/Send?serial=$serial',
+    );
+    final body = jsonEncode({
+      'MessageType': 4, // 0x004 = Set Digital Output
+      'CANAddress': 0, // unused for output control (Arrow is non-CAN)
+      'ExpiryDateUTC': DateTime.now()
+          .toUtc()
+          .add(const Duration(hours: 24))
+          .toIso8601String(),
+      'SendAfterDateUTC': null,
+      'Flags': 0,
+      'Data': base64Encode(data),
+    });
+
+    final resp = await _client
         .post(
           uri,
           headers: {
-            'Authorization': 'Bearer ${ApiConfig.tgApiKeyWrite}',
+            'Authorization': 'Bearer ${ApiConfig.dmApiKeyWrite}',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({
-            'command': 'setOutput',
-            'output': 'relay1',
-            'value': active,
-          }),
+          body: body,
         )
         .timeout(const Duration(seconds: 15));
 
+    final ok = resp.statusCode == 200 || resp.statusCode == 202;
     dev.log(
-      '[TGService] POST command $serial active=$active → ${response.statusCode}',
+      '[TGService] setSprinkler($serial, active=$active) → '
+      '${resp.statusCode} (queued=$ok)',
       name: 'TGService',
     );
+    return ok;
+  }
 
-    return response.statusCode == 200 || response.statusCode == 202;
+  /// Output index wired to the valve relay. Arrow Global exposes one output
+  /// (harness Wire 6) = index 0. Change if the relay is on a different output.
+  static const int _valveOutputIndex = 0;
+
+  /// Builds the 4-byte "Set Digital Output" (0x004) payload:
+  /// [LogicalLevel UINT16 LE][ChangeMask UINT16 LE]. The change mask addresses
+  /// only [outputIndex] so other outputs are left untouched.
+  static List<int> _setOutputData({
+    required bool on,
+    required int outputIndex,
+  }) {
+    final mask = 1 << outputIndex; // apply to this output only
+    final level = on ? mask : 0; // set/clear its bit
+    return [
+      level & 0xFF, (level >> 8) & 0xFF, // logical level, little-endian
+      mask & 0xFF, (mask >> 8) & 0xFF, // change mask, little-endian
+    ];
   }
 
   void dispose() {
@@ -246,9 +250,30 @@ class TGService {
     _notifiers.clear();
     _client.close();
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Parses a DM timestamp (UTC, usually no zone suffix e.g.
+  /// "2026-06-16T20:17:13.540") into a [DateTime]. Appends 'Z' when the string
+  /// carries no zone so it is read as UTC, not local.
+  static DateTime? _parseUtc(dynamic v) {
+    if (v == null) return null;
+    var s = v.toString().trim();
+    if (s.isEmpty) return null;
+    final hasZone = s.endsWith('Z') ||
+        RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(s);
+    if (!hasZone) s = '${s}Z';
+    return DateTime.tryParse(s);
+  }
+
+  static double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
 }
 
-// ── Exceptions ────────────────────────────────────────────────────────────────
+// ── Exceptions (kept for callers that reference them) ────────────────────────
 
 class TGApiException implements Exception {
   const TGApiException(this.message);

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -7,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/activation_entry.dart';
 import '../models/zone.dart';
+import 'device_store.dart';
 import 'history_store.dart';
 import 'live_data_service.dart';
+import 'tg_service.dart';
 
 /// Zone registry shared across screens. Backed by SharedPreferences so zones
 /// (and their activation state) survive app restarts.
@@ -123,6 +126,9 @@ class ZoneStore {
     );
     notify();
     _persist();
+    // Zone activated → spray water: turn the valve ON for every real device
+    // wired into this zone.
+    _commandZoneDevices(id, on: true);
   }
 
   /// Deactivate a single zone. Other active zones are untouched.
@@ -135,6 +141,27 @@ class ZoneStore {
         activeZoneIds.value.where((e) => e != id).toList(growable: false);
     notify();
     _persist();
+    // Zone deactivated → stop spraying: turn the valve OFF for its devices.
+    _commandZoneDevices(id, on: false);
+  }
+
+  /// Drives the physical valve for every real (TG/DM-connected) device wired
+  /// into [zoneId]: ON when the zone activates, OFF when it deactivates.
+  ///
+  /// Fire-and-forget — zone state must never block on the network. Simulated /
+  /// demo zones with no real device simply have nothing to command. The command
+  /// goes out via [TGService.setSprinkler] (Device Manager async "Set Output").
+  void _commandZoneDevices(String zoneId, {required bool on}) {
+    for (final d in DeviceStore.instance.forZone(zoneId)) {
+      if (!d.isTGDevice || d.serialNumber.isEmpty) continue;
+      TGService.instance.setSprinkler(d.serialNumber, active: on).then((ok) {
+        dev.log(
+          '[ZoneStore] zone $zoneId → device ${d.serialNumber} '
+          '${on ? "ON" : "OFF"}: ${ok ? "command queued" : "FAILED"}',
+          name: 'ZoneStore',
+        );
+      });
+    }
   }
 
   void deactivateAll() {

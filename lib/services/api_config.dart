@@ -53,26 +53,33 @@ class ApiConfig {
       'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
       'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query';
 
-  // ── Telematics Guru (TG) — EMEA03 ─────────────────────────────────────
-  // WARNING: In production move these keys to a backend proxy (Firebase
-  // Functions). Storing API keys in the app binary is a security risk.
+  // ── Device telemetry (Digital Matter — Device Manager API, direct) ─────
+  // The app reads device data straight from the Device Manager (OEM Server)
+  // API. These are the working "OneMinute Digital Tech" credentials (scope:
+  // Device Manager); the device lives on the US instance (api.oemserver.com).
   //
-  // Base URL confirmed from Digital Matter official docs (region-specific):
-  //   https://support.digitalmatter.com/security/4-tg-region-specific-details
-  static const String tgBaseUrl = 'https://api-emea03.telematics.guru';
-  static const String tgInstance = 'EMEA03';
-  static const String tgOrganization = 'Datanet IoT';
+  // Auth: `Authorization: Bearer {key}`. Key 1 = read, Key 2 = commands.
+  //
+  // SCOPE LIMIT (verified against all 311 API endpoints): the DM API exposes
+  // last-known POSITION + timestamps + online state only. Valve position,
+  // battery voltage and other decoded I/O are NOT readable here — they live in
+  // Telematics Guru. So [TGTelemetry.sprinklerActive] / batteryVoltage /
+  // waterFlowRate stay null on this path. Lighting those up needs a TG API key.
+  //
+  // POC NOTE: keys are embedded in the binary (acceptable for a POC). For
+  // production, proxy them through a backend so they don't ship in the APK.
+  static const String dmBaseUrl = 'https://api.oemserver.com';
+  static const String dmApiKey =
+      '_iv0RqzAmkhwOtUx_0Vee9.IoP7Hddn5D0ypG4B21XoBnnEGV5Mg7iA3z5EafgCJ0Rg.1';
+  static const String dmApiKeyWrite =
+      'h9isPPJTujJGZb74jxtm2S.lyifC3CEdkmi037SpF0s43e561TvRNJvqg2RorD08wU8.2';
 
-  // API Key 1 — used for read (query) operations.
-  static const String tgApiKey =
-      'FxjcoEI5hdIr5jRejVx-M9.JBcqsxV5n5F1Rn4Mj3h8yONvqp0rtKaZSzMzapbX2p38.1';
+  /// Default Device Manager product id for the POC device (1429272 =
+  /// Arrow-Global-Bluetooth = product 128). The `Get` endpoint requires it.
+  static const int dmDefaultProductId = 128;
 
-  // API Key 2 — reserved for write / command operations.
-  static const String tgApiKeyWrite =
-      'AxL3skDV33RAkFQ_KqJ177.DRdfzdiHaQ-Zn0hoGR164jCuxyVIQG89i-PDMNHhTDia.2';
-
-  // How often the app re-polls TG for device telemetry.
-  static const Duration tgPollInterval = Duration(minutes: 1);
+  /// How often to poll the DM API for fresh position/state (no live stream).
+  static const Duration dmPollInterval = Duration(seconds: 30);
 
   // ── Polling cadence ────────────────────────────────────────────────────
   /// NWS observations update ~hourly; FIRMS/NIFC every few hours. Keep these

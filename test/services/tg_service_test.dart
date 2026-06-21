@@ -1,366 +1,162 @@
 import 'dart:convert';
 
+import 'package:fire_prevention/services/tg_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:fire_prevention/services/tg_service.dart';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/// Tests the Device-Manager-API-backed [TGService]: it polls
+/// `GET /v1/TrackingDevice/Get` and maps the response into [TGTelemetry].
+/// Only position + timestamps + online are available on this path; valve,
+/// battery and flow are intentionally null (they live in Telematics Guru).
 
-http.Response _json(Object body, {int status = 200}) => http.Response(
-      jsonEncode(body),
-      status,
-      headers: {'content-type': 'application/json'},
-    );
+const _serial = '1429272';
 
-String _recentUtc() =>
-    DateTime.now().subtract(const Duration(minutes: 2)).toUtc().toIso8601String();
-
-String _staleUtc() =>
-    DateTime.now().subtract(const Duration(hours: 2)).toUtc().toIso8601String();
-
-// Default org list — numeric id 42, name "Datanet IoT"
-final _defaultOrgs = [
-  {'id': 42, 'name': 'Datanet IoT'}
-];
-
-// Default asset matching serial 1429272
-Map<String, dynamic> _assetJson({
-  String serial = '1429272',
-  String? lastReportedUtc,
-  bool sprinklerActive = false,
-  double waterFlowRate = 0.0,
-  double batteryVoltage = 3.8,
-  String name = 'Sprinkler-A',
-}) =>
-    {
-      'serialNumber': serial,
-      'name': name,
-      'lastReportedUtc': lastReportedUtc ?? _recentUtc(),
-      'latitude': -33.8688,
-      'longitude': 151.2093,
-      'parameters': {
-        'sprinklerActive': sprinklerActive,
-        'waterFlowRate': waterFlowRate,
-      },
-      'batteryVoltage': batteryVoltage,
+// A realistic DM TrackingDevice/Get payload (UTC timestamps, no zone suffix).
+Map<String, dynamic> _dmDevice({String? lastComms}) => {
+      'ICCID': '89882280666087567230',
+      'ModemIMEI': '869487067702380',
+      'LastPositionLatitude': 29.4963399,
+      'LastPositionLongitude': -98.4904228,
+      'LastGpsUpdateUtc': '2026-06-16T20:17:03.000',
+      'LastCommsUTC': lastComms ?? '2026-06-16T20:17:13.540',
+      'DeviceId': 1357680,
+      'ProductId': 128,
+      'IsEnabled': true,
     };
 
-/// Creates a TGService that routes requests by URL path.
-///
-/// Covers the real 3-step API flow:
-///   GET /v2/user/organisations  → [orgs]
-///   GET /v3/assets/{orgId}      → [assets]
-///   POST /v2/{orgId}/asset/…/command → status [commandStatus]
-TGService _routedService({
-  List<Map<String, dynamic>>? orgs,
-  List<Map<String, dynamic>>? assets,
-  int orgStatus = 200,
-  int assetStatus = 200,
-  int commandStatus = 202,
-}) {
-  final orgList = orgs ?? _defaultOrgs;
-  final assetList = assets ?? [_assetJson()];
-
-  return TGService.forTest(MockClient((req) async {
-    final path = req.url.path;
-
-    if (path.endsWith('/organisations')) {
-      return _json(orgList, status: orgStatus);
-    }
-    if (RegExp(r'/v3/assets/\d+').hasMatch(path)) {
-      return _json(assetList, status: assetStatus);
-    }
-    if (path.contains('/command')) {
-      return _json({'status': 'accepted'}, status: commandStatus);
-    }
-    return _json({'error': 'not found'}, status: 404);
-  }));
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 void main() {
-  // ── fetchOrganisations ───────────────────────────────────────────────────
+  group('fetchTelemetryOnce()', () {
+    test('maps a DM device response into TGTelemetry', () async {
+      final client = MockClient((req) async {
+        expect(req.url.path, contains('/v1/TrackingDevice/Get'));
+        expect(req.url.queryParameters['id'], _serial);
+        expect(req.url.queryParameters['product'], '128');
+        expect(req.headers['Authorization'], startsWith('Bearer '));
+        return http.Response(jsonEncode(_dmDevice()), 200);
+      });
+      final service = TGService.forTest(client);
 
-  group('TGService.fetchOrganisations —', () {
-    test('returns parsed org list on 200', () async {
-      final service = _routedService();
+      final t = await service.fetchTelemetryOnce(_serial);
+      expect(t.serial, _serial);
+      expect(t.latitude, closeTo(29.4963399, 1e-6));
+      expect(t.longitude, closeTo(-98.4904228, 1e-6));
+      expect(t.lastSeen, isNotNull);
+      // Not available via the Device Manager API:
+      expect(t.sprinklerActive, isNull);
+      expect(t.batteryVoltage, isNull);
+      expect(t.waterFlowRate, isNull);
 
-      final orgs = await service.fetchOrganisations();
+      service.dispose();
+    });
 
-      expect(orgs.length, 1);
-      expect(orgs.first['name'], 'Datanet IoT');
-      expect(orgs.first['id'], 42);
+    test('parses DM UTC timestamp (no zone) as UTC, not local', () async {
+      final client = MockClient(
+        (req) async => http.Response(jsonEncode(_dmDevice()), 200),
+      );
+      final service = TGService.forTest(client);
+
+      final t = await service.fetchTelemetryOnce(_serial);
+      expect(t.lastSeen!.toUtc().toIso8601String(),
+          startsWith('2026-06-16T20:17:13'));
+
+      service.dispose();
     });
 
     test('throws TGAuthException on 401', () async {
-      final service = _routedService(orgStatus: 401);
-
+      final client = MockClient((req) async => http.Response('', 401));
+      final service = TGService.forTest(client);
       expect(
-        () => service.fetchOrganisations(),
+        () => service.fetchTelemetryOnce(_serial),
         throwsA(isA<TGAuthException>()),
       );
+      service.dispose();
     });
 
-    test('throws TGAuthException on 403', () async {
-      final service = _routedService(orgStatus: 403);
-
+    test('throws TGNotFoundException on 404', () async {
+      final client =
+          MockClient((req) async => http.Response('No data.', 404));
+      final service = TGService.forTest(client);
       expect(
-        () => service.fetchOrganisations(),
-        throwsA(isA<TGAuthException>()),
-      );
-    });
-
-    test('throws TGApiException on 500', () async {
-      final service = _routedService(orgStatus: 500);
-
-      expect(
-        () => service.fetchOrganisations(),
-        throwsA(isA<TGApiException>()),
-      );
-    });
-
-    test('sends Authorization Bearer header', () async {
-      String? capturedAuth;
-      final service = TGService.forTest(MockClient((req) async {
-        capturedAuth = req.headers['Authorization'];
-        return _json(_defaultOrgs);
-      }));
-
-      await service.fetchOrganisations();
-
-      expect(capturedAuth, startsWith('Bearer '));
-    });
-  });
-
-  // ── fetchTelemetry ───────────────────────────────────────────────────────
-
-  group('TGService.fetchTelemetry —', () {
-    test('parses a successful response into TGTelemetry', () async {
-      final service = _routedService(
-        assets: [
-          _assetJson(
-            sprinklerActive: true,
-            waterFlowRate: 8.3,
-            batteryVoltage: 3.9,
-            name: 'Sprinkler-A',
-          )
-        ],
-      );
-
-      final t = await service.fetchTelemetry('1429272');
-
-      expect(t.serial, '1429272');
-      expect(t.isOnline, isTrue);
-      expect(t.assetName, 'Sprinkler-A');
-      expect(t.sprinklerActive, isTrue);
-      expect(t.waterFlowRate, closeTo(8.3, 0.01));
-      expect(t.batteryVoltage, closeTo(3.9, 0.01));
-    });
-
-    test('sends Authorization Bearer header on both org and asset calls', () async {
-      final captured = <String>[];
-      final service = TGService.forTest(MockClient((req) async {
-        captured.add(req.headers['Authorization'] ?? '');
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        return _json([_assetJson()]);
-      }));
-
-      await service.fetchTelemetry('1429272');
-
-      expect(captured.length, 2);
-      expect(captured.every((h) => h.startsWith('Bearer ')), isTrue);
-    });
-
-    test('org request hits /v2/user/organisations', () async {
-      Uri? orgUri;
-      final service = TGService.forTest(MockClient((req) async {
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) {
-          orgUri = req.url;
-          return _json(_defaultOrgs);
-        }
-        return _json([_assetJson()]);
-      }));
-
-      await service.fetchTelemetry('1429272');
-
-      expect(orgUri?.path, contains('/v2/user/organisations'));
-    });
-
-    test('asset request URL contains the org ID', () async {
-      Uri? assetUri;
-      final service = TGService.forTest(MockClient((req) async {
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        assetUri = req.url;
-        return _json([_assetJson()]);
-      }));
-
-      await service.fetchTelemetry('1429272');
-
-      // Org id 42 from _defaultOrgs must appear in the assets path
-      expect(assetUri?.path, contains('42'));
-    });
-
-    test('throws TGAuthException when org call returns 401', () async {
-      final service = _routedService(orgStatus: 401);
-
-      expect(
-        () => service.fetchTelemetry('1429272'),
-        throwsA(isA<TGAuthException>()),
-      );
-    });
-
-    test('throws TGNotFoundException when serial is not in asset list', () async {
-      final service = _routedService(
-        assets: [_assetJson(serial: '9999999')], // different serial
-      );
-
-      expect(
-        () => service.fetchTelemetry('1429272'),
+        () => service.fetchTelemetryOnce('999'),
         throwsA(isA<TGNotFoundException>()),
       );
+      service.dispose();
     });
+  });
 
-    test('parses offline device (stale timestamp) correctly', () async {
-      final service = _routedService(
-        assets: [_assetJson(lastReportedUtc: _staleUtc())],
+  group('watch()', () {
+    test('emits mapped telemetry from the first poll', () async {
+      final client = MockClient(
+        (req) async => http.Response(jsonEncode(_dmDevice()), 200),
       );
+      final service = TGService.forTest(client);
 
-      final t = await service.fetchTelemetry('1429272');
+      final notifier = service.watch(_serial);
+      await _untilNotNull(notifier);
 
-      expect(t.isOnline, isFalse);
-      expect(t.statusLabel, 'Offline');
-    });
-
-    test('returns null sprinklerActive when field is absent', () async {
-      final service = _routedService(
-        assets: [
-          {
-            'serialNumber': '1429272',
-            'lastReportedUtc': _recentUtc(),
-            'parameters': {'waterFlowRate': 0.0},
-          }
-        ],
-      );
-
-      final t = await service.fetchTelemetry('1429272');
-
-      expect(t.sprinklerActive, isNull);
-    });
-
-    test('org ID is cached — second fetchTelemetry makes only one HTTP call', () async {
-      int callCount = 0;
-      final service = TGService.forTest(MockClient((req) async {
-        callCount++;
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        return _json([_assetJson()]);
-      }));
-
-      await service.fetchTelemetry('1429272'); // 2 calls: orgs + assets
-      callCount = 0;
-      await service.fetchTelemetry('1429272'); // only 1 call: assets (org cached)
-
-      expect(callCount, 1);
+      expect(notifier.value!.latitude, closeTo(29.4963399, 1e-6));
+      service.dispose();
     });
   });
 
-  // ── setSprinkler ─────────────────────────────────────────────────────────
-
-  group('TGService.setSprinkler —', () {
-    test('sends POST with correct payload for turn-on command', () async {
-      Map<String, dynamic>? capturedBody;
-      String? capturedAuth;
-
-      final service = TGService.forTest(MockClient((req) async {
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        if (RegExp(r'/v3/assets/\d+').hasMatch(path)) return _json([_assetJson()]);
-        capturedBody = jsonDecode(req.body) as Map<String, dynamic>;
-        capturedAuth = req.headers['Authorization'];
-        return _json({'status': 'accepted'}, status: 202);
-      }));
-
-      final result = await service.setSprinkler('1429272', active: true);
-
-      expect(result, isTrue);
-      expect(capturedBody?['value'], isTrue);
-      expect(capturedAuth, startsWith('Bearer '));
+  group('backendReachable()', () {
+    test('true when the key authenticates', () async {
+      final client =
+          MockClient((req) async => http.Response('[]', 200));
+      final service = TGService.forTest(client);
+      expect(await service.backendReachable(), isTrue);
+      service.dispose();
     });
 
-    test('sends active=false for turn-off command', () async {
-      Map<String, dynamic>? capturedBody;
-
-      final service = TGService.forTest(MockClient((req) async {
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        if (RegExp(r'/v3/assets/\d+').hasMatch(path)) return _json([_assetJson()]);
-        capturedBody = jsonDecode(req.body) as Map<String, dynamic>;
-        return _json({'status': 'accepted'}, status: 202);
-      }));
-
-      await service.setSprinkler('1429272', active: false);
-
-      expect(capturedBody?['value'], isFalse);
-    });
-
-    test('returns true on 200 response', () async {
-      final service = _routedService(commandStatus: 200);
-      // Prime the org cache
-      await service.fetchTelemetry('1429272');
-
-      expect(await service.setSprinkler('1429272', active: true), isTrue);
-    });
-
-    test('returns true on 202 accepted response', () async {
-      final service = _routedService(commandStatus: 202);
-      await service.fetchTelemetry('1429272');
-
-      expect(await service.setSprinkler('1429272', active: true), isTrue);
-    });
-
-    test('returns false on non-2xx response', () async {
-      final service = _routedService(commandStatus: 400);
-      await service.fetchTelemetry('1429272');
-
-      expect(await service.setSprinkler('1429272', active: true), isFalse);
-    });
-
-    test('POST URL contains the serial number', () async {
-      Uri? capturedUri;
-
-      final service = TGService.forTest(MockClient((req) async {
-        final path = req.url.path;
-        if (path.endsWith('/organisations')) return _json(_defaultOrgs);
-        if (RegExp(r'/v3/assets/\d+').hasMatch(path)) return _json([_assetJson()]);
-        capturedUri = req.url;
-        return _json({}, status: 202);
-      }));
-
-      await service.setSprinkler('1429272', active: true);
-
-      expect(capturedUri.toString(), contains('1429272'));
+    test('throws TGAuthException on 401', () async {
+      final client = MockClient((req) async => http.Response('', 401));
+      final service = TGService.forTest(client);
+      expect(service.backendReachable, throwsA(isA<TGAuthException>()));
+      service.dispose();
     });
   });
 
-  // ── Exception hierarchy ───────────────────────────────────────────────────
-
-  group('TGService exception hierarchy —', () {
-    test('TGAuthException is a TGApiException', () {
-      expect(const TGAuthException('test'), isA<TGApiException>());
+  group('setSprinkler()', () {
+    test('sends a Set-Digital-Output (0x004) async command and reports queued',
+        () async {
+      final client = MockClient((req) async {
+        expect(req.method, 'POST');
+        expect(req.url.path, contains('/v1/AsyncMessaging/Send'));
+        expect(req.url.queryParameters['serial'], _serial);
+        expect(req.headers['Authorization'], startsWith('Bearer '));
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        expect(body['MessageType'], 4);
+        // Data is a base64 payload: ON for output 0 → level 0x0001, mask 0x0001.
+        expect(base64Decode(body['Data'] as String), [1, 0, 1, 0]);
+        return http.Response('', 202);
+      });
+      final service = TGService.forTest(client);
+      expect(await service.setSprinkler(_serial, active: true), isTrue);
+      service.dispose();
     });
 
-    test('TGNotFoundException is a TGApiException', () {
-      expect(const TGNotFoundException('test'), isA<TGApiException>());
-    });
-
-    test('TGApiException.toString includes the message', () {
-      const e = TGApiException('something went wrong');
-      expect(e.toString(), contains('something went wrong'));
+    test('OFF clears the output level bit', () async {
+      final client = MockClient((req) async {
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        expect(base64Decode(body['Data'] as String), [0, 0, 1, 0]);
+        return http.Response('', 202);
+      });
+      final service = TGService.forTest(client);
+      expect(await service.setSprinkler(_serial, active: false), isTrue);
+      service.dispose();
     });
   });
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+Future<void> _untilNotNull<T>(ValueNotifier<T?> n,
+    {Duration timeout = const Duration(seconds: 2)}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (n.value == null) {
+    if (DateTime.now().isAfter(deadline)) fail('No value within $timeout');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
