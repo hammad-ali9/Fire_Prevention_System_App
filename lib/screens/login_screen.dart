@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
@@ -46,8 +47,13 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
       if (!mounted) return;
-      // AuthGate routes us away automatically; pop anything pushed on top.
-      Navigator.of(context).popUntil((r) => r.isFirst);
+      // Explicit nav (not just _AuthGate rebuild): after a settings sign-out
+      // the gate is no longer in the stack, so go straight to home and wipe
+      // the back stack regardless of auth-stream timing.
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       _toast(AuthService.describeError(e));
@@ -62,7 +68,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await AuthService.instance.signInWithGoogle();
       if (!mounted) return;
       if (result == null) return; // user cancelled
-      Navigator.of(context).popUntil((r) => r.isFirst);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       _toast(AuthService.describeError(e));
@@ -186,8 +195,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 18),
                         SocialButton(
                           label: 'Continue with Apple',
-                          iconAsset: const Icon(Icons.apple,
-                              color: Colors.black),
+                          iconAsset: SvgPicture.asset(
+                            'assets/icons/apple.svg',
+                            width: 20,
+                            height: 20,
+                          ),
                           onPressed: _busy
                               ? null
                               : () => _toast(
@@ -196,7 +208,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 15),
                         SocialButton(
                           label: 'Continue with Google',
-                          iconAsset: const _GoogleGlyph(),
+                          iconAsset: SvgPicture.asset(
+                            'assets/icons/google.svg',
+                            width: 20,
+                            height: 20,
+                          ),
                           onPressed: _busy ? null : _signInWithGoogle,
                         ),
                         const SizedBox(height: 32),
@@ -246,46 +262,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}
-
-/// Minimal Google "G" glyph — drawn rather than embedding the Figma raster.
-class _GoogleGlyph extends StatelessWidget {
-  const _GoogleGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(20, 20),
-      painter: _GooglePainter(),
-    );
-  }
-}
-
-class _GooglePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paints = <Color, Paint>{
-      const Color(0xFF4285F4): Paint()..color = const Color(0xFF4285F4),
-      const Color(0xFF34A853): Paint()..color = const Color(0xFF34A853),
-      const Color(0xFFFBBC05): Paint()..color = const Color(0xFFFBBC05),
-      const Color(0xFFEA4335): Paint()..color = const Color(0xFFEA4335),
-    };
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2;
-    final rect = Rect.fromCircle(center: c, radius: r);
-    canvas.drawArc(rect, -1.57, 1.57, true, paints[const Color(0xFF4285F4)]!);
-    canvas.drawArc(rect, 0, 1.57, true, paints[const Color(0xFF34A853)]!);
-    canvas.drawArc(rect, 1.57, 1.57, true, paints[const Color(0xFFFBBC05)]!);
-    canvas.drawArc(rect, 3.14, 1.57, true, paints[const Color(0xFFEA4335)]!);
-    final cut = Paint()..color = Colors.white;
-    canvas.drawCircle(c, r * 0.45, cut);
-    final notch = Paint()..color = paints[const Color(0xFF4285F4)]!.color;
-    canvas.drawRect(
-      Rect.fromLTWH(c.dx, c.dy - 1.5, r, 3),
-      notch,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -27,6 +27,33 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
     super.dispose();
   }
 
+  Future<void> _confirmDelete(BuildContext context, Zone zone) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete zone?'),
+        content: Text(
+          'Remove ${zone.fullLabel}? This stops any active protocol and '
+          'cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFBA0C0C),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) ZoneStore.instance.removeZone(zone.id);
+  }
+
   bool _matches(Zone z, String q) {
     if (q.isEmpty) return true;
     final ql = q.toLowerCase();
@@ -115,6 +142,7 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
                           onSelect: () => Navigator.pop(context, filtered[i]),
                           onStop: () =>
                               ZoneStore.instance.deactivate(filtered[i].id),
+                          onDelete: () => _confirmDelete(context, filtered[i]),
                           onSelectDevice: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -264,6 +292,7 @@ class _ZoneCard extends StatelessWidget {
     required this.isActive,
     required this.onSelect,
     required this.onStop,
+    required this.onDelete,
     required this.onSelectDevice,
   });
 
@@ -271,6 +300,7 @@ class _ZoneCard extends StatelessWidget {
   final bool isActive;
   final VoidCallback onSelect;
   final VoidCallback onStop;
+  final VoidCallback onDelete;
   final VoidCallback onSelectDevice;
 
   /// Action-button fill by risk level — Figma node 53:5972 (ZONE LIST).
@@ -351,6 +381,22 @@ class _ZoneCard extends StatelessWidget {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onDelete,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDECEC),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded,
+                      size: 18, color: Color(0xFFBA0C0C)),
                 ),
               ),
             ],

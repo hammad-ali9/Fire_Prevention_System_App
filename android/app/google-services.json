@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "699348421681-09rp8esm1cgqudeddr9sjip0jpdlkmp7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fire_prevention",
+            "certificate_hash": "5e0c8cfdfd6e3cfa07fd406c76aac76aa0beec44"
+          }
+        },
+        {
           "client_id": "699348421681-8cch93iqpf5hgkr7q0t8dfhb601rm176.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

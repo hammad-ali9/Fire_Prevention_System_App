@@ -145,6 +145,16 @@ class ZoneStore {
     _commandZoneDevices(id, on: false);
   }
 
+  /// Permanently remove a zone. Deactivates it first (closing any open history
+  /// entry + clearing active state), then drops it from the registry.
+  void removeZone(String id) {
+    if (findById(id) == null) return;
+    deactivate(id); // no-op if not active; closes history + active state
+    zones.value =
+        zones.value.where((z) => z.id != id).toList(growable: false);
+    _persist();
+  }
+
   /// Drives the physical valve for every real (TG/DM-connected) device wired
   /// into [zoneId]: ON when the zone activates, OFF when it deactivates.
   ///

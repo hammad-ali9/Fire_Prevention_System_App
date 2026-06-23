@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/zone.dart';
-import '../routes/app_routes.dart';
 import '../services/fire_data_store.dart';
 import '../services/risk_engine.dart';
 import '../services/settings_store.dart';
@@ -136,7 +135,9 @@ class _Body extends StatelessWidget {
               } else {
                 ZoneStore.instance.activate(zone.id);
               }
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
+              // Return to the dashboard root rather than spawning a fresh home
+              // on top of this pushed screen.
+              Navigator.popUntil(context, (r) => r.isFirst);
             },
           ),
         ),

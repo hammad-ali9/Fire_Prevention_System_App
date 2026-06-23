@@ -58,8 +58,17 @@ class AppBottomNav extends StatelessWidget {
   }
 
   void _goto(BuildContext context, String route) {
+    final nav = Navigator.of(context);
     if (ModalRoute.of(context)?.settings.name == route) return;
-    Navigator.pushReplacementNamed(context, route);
+    // Dashboard is the persistent root. Tapping it drops any sub-tab on top;
+    // tapping another tab resets to the root first, then stacks that tab — so
+    // the hardware/UI Back button always returns to Dashboard rather than
+    // exiting the app. Anchoring to isFirst works whether the root arrived as
+    // "/" (AuthGate) or "/home" (after a fresh login).
+    nav.popUntil((r) => r.isFirst);
+    if (route != AppRoutes.home) {
+      nav.pushNamed(route);
+    }
   }
 }
 

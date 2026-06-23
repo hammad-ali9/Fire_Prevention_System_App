@@ -166,7 +166,7 @@ class _CreateZoneDialogState extends State<CreateZoneDialog> {
                 const SizedBox(height: 8),
                 _inputPill(
                   controller: _lat,
-                  icon: Icons.mail_outline,
+                  icon: Icons.my_location_outlined,
                   hint: 'e.g. 34.0522',
                   number: true,
                 ),
@@ -175,7 +175,7 @@ class _CreateZoneDialogState extends State<CreateZoneDialog> {
                 const SizedBox(height: 8),
                 _inputPill(
                   controller: _lng,
-                  icon: Icons.mail_outline,
+                  icon: Icons.place_outlined,
                   hint: 'e.g. -118.2437',
                   number: true,
                 ),

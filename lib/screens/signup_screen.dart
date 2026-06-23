@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/input_field.dart';
@@ -268,8 +269,13 @@ class _SignupScreenState extends State<SignupScreen> {
         password: password,
       );
       if (!context.mounted) return;
-      // AuthGate routes to home/zone-create automatically once the user is set.
-      Navigator.of(context).popUntil((r) => r.isFirst);
+      // Explicit nav: after a settings sign-out the _AuthGate is gone from the
+      // stack, so push home and wipe the back stack rather than relying on the
+      // gate rebuild.
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       _toast(AuthService.describeError(e));
@@ -284,7 +290,10 @@ class _SignupScreenState extends State<SignupScreen> {
       final result = await AuthService.instance.signInWithGoogle();
       if (!mounted) return;
       if (result == null) return;
-      Navigator.of(context).popUntil((r) => r.isFirst);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       _toast(AuthService.describeError(e));
