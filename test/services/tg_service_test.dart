@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:fire_prevention/services/tg_service.dart';
+import 'package:rainfire/services/tg_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -119,7 +119,7 @@ void main() {
   });
 
   group('setSprinkler()', () {
-    test('sends a Set-Digital-Output (0x004) async command and reports queued',
+    test('sends an Immobilise (0x0100) async command and reports queued',
         () async {
       final client = MockClient((req) async {
         expect(req.method, 'POST');
@@ -127,9 +127,10 @@ void main() {
         expect(req.url.queryParameters['serial'], _serial);
         expect(req.headers['Authorization'], startsWith('Bearer '));
         final body = jsonDecode(req.body) as Map<String, dynamic>;
-        expect(body['MessageType'], 4);
-        // Data is a base64 payload: ON for output 0 → level 0x0001, mask 0x0001.
-        expect(base64Decode(body['Data'] as String), [1, 0, 1, 0]);
+        expect(body['MessageType'], 256);
+        expect(body['CANAddress'], 4294967295);
+        // Data is a JSON numeric array: ON → immobilise → [1].
+        expect(body['Data'], [1]);
         return http.Response('', 202);
       });
       final service = TGService.forTest(client);
@@ -137,10 +138,11 @@ void main() {
       service.dispose();
     });
 
-    test('OFF clears the output level bit', () async {
+    test('OFF releases the immobiliser', () async {
       final client = MockClient((req) async {
         final body = jsonDecode(req.body) as Map<String, dynamic>;
-        expect(base64Decode(body['Data'] as String), [0, 0, 1, 0]);
+        expect(body['MessageType'], 256);
+        expect(body['Data'], [0]);
         return http.Response('', 202);
       });
       final service = TGService.forTest(client);

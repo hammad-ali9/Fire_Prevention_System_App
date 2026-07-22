@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fire_prevention/models/tg_telemetry.dart';
+import 'package:rainfire/models/tg_telemetry.dart';
 
 void main() {
   group('TGTelemetry.fromJson —', () {
@@ -221,6 +221,96 @@ void main() {
             .toIso8601String(),
       });
       expect(t.lastSeenLabel, '2d ago');
+    });
+  });
+
+  group('TGTelemetry.fromTgAsset —', () {
+    // Real GET /v1/asset/103028 payload captured live from EMEA03 on
+    // 2026-07-03 (timestamp replaced so the online check stays deterministic).
+    Map<String, dynamic> livePayload({String? lastConnectedUtc}) => {
+          'lastLatitude': 29.4962831,
+          'lastLongitude': -98.4903971,
+          'analogInputs': [
+            {'key': 'Battery Voltage', 'value': '4.2 V'},
+            {'key': 'Cellular Signal', 'value': 'Excellent'},
+            {'key': 'External Voltage', 'value': '12.1 V'},
+            {'key': 'Inside Temperature', 'value': '28.52 C'},
+          ],
+          'digitalInputs': [
+            {'key': 'Ignition', 'value': 'Off'},
+            {'key': 'Valve position', 'value': 'Closed'},
+          ],
+          'id': 103028,
+          'name': '00000_Valve Control',
+          'code': 'MIR-Valve',
+          'lastConnectedUtc': lastConnectedUtc ?? '2026-07-03T05:47:33.26',
+        };
+
+    test('parses the live EMEA03 asset payload', () {
+      final t = TGTelemetry.fromTgAsset('1429272', livePayload());
+
+      expect(t.serial, '1429272');
+      expect(t.assetName, '00000_Valve Control');
+      expect(t.latitude, closeTo(29.4962831, 0.0000001));
+      expect(t.longitude, closeTo(-98.4903971, 0.0000001));
+      expect(t.batteryVoltage, closeTo(4.2, 0.001));
+      expect(t.externalVoltage, closeTo(12.1, 0.001));
+      expect(t.insideTempC, closeTo(28.52, 0.001));
+      expect(t.cellularSignal, 'Excellent');
+      expect(t.sprinklerActive, isFalse); // Valve position: Closed
+      expect(t.ignitionOn, isFalse);
+      expect(t.waterFlowRate, isNull); // no flow sensor on POC device
+    });
+
+    test('treats "Open" valve position as sprinklerActive = true', () {
+      final json = livePayload();
+      json['digitalInputs'] = [
+        {'key': 'Valve position', 'value': 'Open'},
+      ];
+      final t = TGTelemetry.fromTgAsset('1429272', json);
+      expect(t.sprinklerActive, isTrue);
+    });
+
+    test('parses the zone-less TG timestamp as UTC', () {
+      final recent = DateTime.now()
+          .toUtc()
+          .subtract(const Duration(minutes: 10))
+          .toIso8601String()
+          .replaceAll('Z', ''); // TG omits the zone suffix
+      final t = TGTelemetry.fromTgAsset(
+          '1429272', livePayload(lastConnectedUtc: recent));
+      expect(t.isOnline, isTrue);
+      expect(t.lastSeen, isNotNull);
+    });
+
+    test('marks device offline when lastConnectedUtc exceeds threshold', () {
+      final stale = DateTime.now()
+          .toUtc()
+          .subtract(TGTelemetry.onlineThreshold + const Duration(minutes: 1))
+          .toIso8601String()
+          .replaceAll('Z', '');
+      final t = TGTelemetry.fromTgAsset(
+          '1429272', livePayload(lastConnectedUtc: stale));
+      expect(t.isOnline, isFalse);
+    });
+
+    test('handles missing inputs without throwing', () {
+      final t = TGTelemetry.fromTgAsset('1429272', {'id': 103028});
+      expect(t.sprinklerActive, isNull);
+      expect(t.batteryVoltage, isNull);
+      expect(t.externalVoltage, isNull);
+      expect(t.insideTempC, isNull);
+      expect(t.cellularSignal, isNull);
+      expect(t.ignitionOn, isNull);
+      expect(t.isOnline, isFalse);
+    });
+
+    test('display labels format the live values', () {
+      final t = TGTelemetry.fromTgAsset('1429272', livePayload());
+      expect(t.insideTempLabel, '28.5 °C');
+      expect(t.externalVoltageLabel, '12.1 V');
+      expect(t.batteryLabel, '4.20 V');
+      expect(t.sprinklerLabel, 'Standby');
     });
   });
 }

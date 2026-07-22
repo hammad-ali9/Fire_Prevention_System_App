@@ -4,8 +4,10 @@ import '../models/zone.dart';
 import '../services/zone_store.dart';
 import '../theme/app_colors.dart';
 import '../widgets/page_header.dart';
+import 'add_zone_via_device_sheet.dart';
 import 'create_zone_dialog.dart';
 import '../widgets/status_bar.dart';
+import 'zone_creation_screen.dart';
 import 'zone_devices_screen.dart';
 
 /// SELECT ZONE — Figma node 1:966.
@@ -25,6 +27,36 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
   void dispose() {
     _query.dispose();
     super.dispose();
+  }
+
+  /// Bottom-sheet menu shown from the "+" button: pick how the zone's location
+  /// is set — tap/type it manually, or seed it from a device's live position.
+  Future<void> _showAddZoneMenu(BuildContext context) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _AddZoneMenu(),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == 'manual') {
+      CreateZoneDialog.show(context);
+      return;
+    }
+    // Via device: capture the device's live location, then confirm on the map.
+    final result = await AddZoneViaDeviceSheet.show(context);
+    if (result == null || !context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ZoneCreationScreen(
+          presetName: result.name,
+          presetCenter: result.center,
+          deviceSerial: result.serial,
+          deviceRegion: result.region,
+          deviceType: result.type,
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmDelete(BuildContext context, Zone zone) async {
@@ -76,7 +108,7 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
               child: PageHeader(
                 title: 'Zone List',
                 trailing: GestureDetector(
-                  onTap: () => CreateZoneDialog.show(context),
+                  onTap: () => _showAddZoneMenu(context),
                   child: Container(
                     width: 55,
                     height: 55,
@@ -104,7 +136,9 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
                   return ValueListenableBuilder<TextEditingValue>(
                     valueListenable: _query,
                     builder: (context, value, _) {
-                      if (zones.isEmpty) return const _Empty();
+                      if (zones.isEmpty) {
+                        return _Empty(onAdd: () => _showAddZoneMenu(context));
+                      }
                       const riskOrder = {
                         'HIGH': 0,
                         'ELEVATED': 1,
@@ -231,7 +265,8 @@ class _SelectZoneScreenState extends State<SelectZoneScreen> {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty();
+  const _Empty({required this.onAdd});
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -273,12 +308,130 @@ class _Empty extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
-              onPressed: () =>
-                  CreateZoneDialog.show(context),
+              onPressed: onAdd,
               icon: const Icon(Icons.add_location_alt_outlined,
                   color: Colors.white),
               label: const Text('Add Zone'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "+" action sheet: choose Manual vs Device as the zone's location
+/// source. Pops 'manual' or 'device' to [_showAddZoneMenu].
+class _AddZoneMenu extends StatelessWidget {
+  const _AddZoneMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Text(
+                'Add Zone',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF272727),
+                ),
+              ),
+            ),
+            _AddZoneOption(
+              icon: Icons.edit_location_alt_outlined,
+              title: 'Add Zone Manually',
+              subtitle: 'Tap the map or enter latitude / longitude',
+              onTap: () => Navigator.pop(context, 'manual'),
+            ),
+            const SizedBox(height: 8),
+            _AddZoneOption(
+              icon: Icons.sensors_rounded,
+              title: 'Add Zone via Device',
+              subtitle: 'Use a device\'s live reported location',
+              onTap: () => Navigator.pop(context, 'device'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddZoneOption extends StatelessWidget {
+  const _AddZoneOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFEAEAEA)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(21),
+              ),
+              child: Icon(icon, size: 20, color: AppColors.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF272727),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF62748E),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFF90A1B9)),
           ],
         ),
       ),

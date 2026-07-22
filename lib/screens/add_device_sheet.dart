@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/device.dart';
 import '../models/zone.dart';
 import '../services/device_store.dart';
+import '../services/telemetry_service.dart';
 import '../services/tg_service.dart';
 import '../theme/app_colors.dart';
 
@@ -52,6 +53,9 @@ class _SheetState extends State<_Sheet> {
   _CheckStatus _checkCredentials = _CheckStatus.idle;
   // IP allowlisting is always a manual step — never auto-resolved.
   final _CheckStatus _checkIp = _CheckStatus.manual;
+  // Why the asset check failed, when it did — shown under the checks list so
+  // "device IS in TG but check fails" is explainable (usually IP allowlist).
+  String? _assetFailReason;
 
   @override
   void dispose() {
@@ -91,44 +95,70 @@ class _SheetState extends State<_Sheet> {
       _checkAsset = _CheckStatus.loading;
       _checkConnector = _CheckStatus.loading;
       _checkCredentials = _CheckStatus.loading;
+      _assetFailReason = null;
     });
 
     // Connector check is local — no network needed
     await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
     setState(() {
       _checkConnector = _connector == 'TG'
           ? _CheckStatus.passed
           : _CheckStatus.failed;
     });
 
-    // Step 1: Check backend reachable (Firestore, signed-in user).
-    try {
-      await TGService.instance.backendReachable();
-      setState(() => _checkCredentials = _CheckStatus.passed);
-    } on TGAuthException {
-      setState(() {
-        _checkCredentials = _CheckStatus.failed;
-        // If auth fails, skip asset check — no point calling with bad creds
-        _checkAsset = _CheckStatus.failed;
-      });
-      return;
-    } catch (_) {
+    // Step 1: Credentials — Firebase sign-in (backend path) OR the DM API key
+    // authenticating directly (POC fallback while the backend isn't deployed).
+    final credsOk = await TelemetryService.instance.credentialsOk();
+    if (!mounted) return;
+    if (!credsOk) {
       setState(() {
         _checkCredentials = _CheckStatus.failed;
         _checkAsset = _CheckStatus.failed;
+        _assetFailReason =
+            'Could not authenticate: not signed in to the app backend and the '
+            'DM API rejected or never answered the request. If this phone is '
+            'on mobile data or a new WiFi, its IP is likely not allowlisted — '
+            'see the IP Allowlisting guide below.';
       });
       return;
     }
+    setState(() => _checkCredentials = _CheckStatus.passed);
 
-    // Step 2: Check telemetry exists for this serial in Firestore.
+    // Step 2: Device known — Firestore telemetry doc (backend path) with a
+    // direct DM API lookup as fallback.
     try {
       final serial = _serialCtrl.text.trim();
-      await TGService.instance.fetchTelemetryOnce(serial);
-      setState(() => _checkAsset = _CheckStatus.passed);
-    } on TGNotFoundException {
-      setState(() => _checkAsset = _CheckStatus.failed);
-    } catch (_) {
-      setState(() => _checkAsset = _CheckStatus.failed);
+      final known = await TelemetryService.instance.deviceKnown(serial);
+      if (!mounted) return;
+      setState(() {
+        _checkAsset = known ? _CheckStatus.passed : _CheckStatus.failed;
+        if (!known) {
+          _assetFailReason =
+              'The DM API answered but has no device with serial $serial on '
+              'this account. Confirm the serial and that the API key\'s '
+              'organisation ("Datanet IoT") owns the device.';
+        }
+      });
+    } on TGAuthException {
+      if (!mounted) return;
+      setState(() {
+        _checkAsset = _CheckStatus.failed;
+        _assetFailReason =
+            'DM API key rejected (401/403). The key may have been rotated or '
+            'lacks read scope.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _checkAsset = _CheckStatus.failed;
+        _assetFailReason =
+            'Could not reach the DM API from this network — the device may '
+            'well exist in TG. This is almost always the IP allowlist: this '
+            'phone\'s current IP isn\'t allowlisted for org "Datanet IoT". '
+            'Disable the allowlist in TG for testing, or add this IP — see '
+            'the IP Allowlisting guide below.';
+      });
     }
   }
 
@@ -491,20 +521,6 @@ class _SheetState extends State<_Sheet> {
           groupValue: _connector,
           onChanged: (v) => setState(() => _connector = v),
         ),
-        const SizedBox(height: 19),
-        _RadioOption(
-          label: 'Direct MQTT',
-          value: 'Direct MQTT',
-          groupValue: _connector,
-          onChanged: (v) => setState(() => _connector = v),
-        ),
-        const SizedBox(height: 19),
-        _RadioOption(
-          label: 'Web hook Push',
-          value: 'Webhook Push',
-          groupValue: _connector,
-          onChanged: (v) => setState(() => _connector = v),
-        ),
         const SizedBox(height: 24),
         const _SectionLabel('Data Retrieval Mode'),
         const SizedBox(height: 15),
@@ -569,10 +585,10 @@ class _SheetState extends State<_Sheet> {
 
     const allFields = [
       'Locations',
-      'Trip Data',
+      // 'Trip Data',
       'Temperature',
-      'Humidity',
-      'Motion',
+      // 'Humidity',
+      // 'Motion',
       'Battery',
     ];
 
@@ -676,6 +692,55 @@ class _SheetState extends State<_Sheet> {
             ],
           ),
         ),
+        if (_assetFailReason != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFFBA0C0C).withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    size: 18, color: Color(0xFFBA0C0C)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _assetFailReason!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFFBA0C0C),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: _runChecks,
+                        child: const Text(
+                          'Retry checks',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFBA0C0C),
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         _ActionButton(
           label: 'Activate Device',

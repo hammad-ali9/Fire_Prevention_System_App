@@ -11,7 +11,7 @@ import '../models/zone.dart';
 import 'device_store.dart';
 import 'history_store.dart';
 import 'live_data_service.dart';
-import 'tg_service.dart';
+import 'telemetry_service.dart';
 
 /// Zone registry shared across screens. Backed by SharedPreferences so zones
 /// (and their activation state) survive app restarts.
@@ -160,11 +160,12 @@ class ZoneStore {
   ///
   /// Fire-and-forget — zone state must never block on the network. Simulated /
   /// demo zones with no real device simply have nothing to command. The command
-  /// goes out via [TGService.setSprinkler] (Device Manager async "Set Output").
+  /// goes out via the `dmSetOutput` backend callable (server holds the DM write
+  /// key), which drives the Device Manager async "Set Output".
   void _commandZoneDevices(String zoneId, {required bool on}) {
     for (final d in DeviceStore.instance.forZone(zoneId)) {
       if (!d.isTGDevice || d.serialNumber.isEmpty) continue;
-      TGService.instance.setSprinkler(d.serialNumber, active: on).then((ok) {
+      TelemetryService.instance.setSprinkler(d.serialNumber, active: on).then((ok) {
         dev.log(
           '[ZoneStore] zone $zoneId → device ${d.serialNumber} '
           '${on ? "ON" : "OFF"}: ${ok ? "command queued" : "FAILED"}',

@@ -12,5 +12,5 @@ class MapConfig {
   static const String attribution =
       '© MapTiler © OpenStreetMap contributors';
 
-  static const String userAgent = 'fire_prevention_poc';
+  static const String userAgent = 'rainfire_app';
 }

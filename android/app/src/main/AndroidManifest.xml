@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="fire_prevention"
+        android:label="RainFire"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

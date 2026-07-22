@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
 import '../models/tg_telemetry.dart';
-import 'tg_service.dart';
+import 'telemetry_service.dart';
 
 class DeviceStore {
   DeviceStore._();
@@ -27,10 +27,10 @@ class DeviceStore {
       final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
       final loaded = list.map(Device.fromJson).toList();
       _devices.value = loaded;
-      // Resume TG polling for any TG devices restored from disk.
+      // Resume telemetry streams for any TG devices restored from disk.
       for (final d in loaded) {
         if (d.isTGDevice && d.serialNumber.isNotEmpty) {
-          TGService.instance.watch(d.serialNumber);
+          TelemetryService.instance.watch(d.serialNumber);
         }
       }
     } catch (_) {
@@ -49,7 +49,7 @@ class DeviceStore {
   void add(Device device) {
     _devices.value = [..._devices.value, device];
     if (device.isTGDevice && device.serialNumber.isNotEmpty) {
-      TGService.instance.watch(device.serialNumber);
+      TelemetryService.instance.watch(device.serialNumber);
     }
     _persist();
   }
@@ -62,7 +62,7 @@ class DeviceStore {
         device.serialNumber.isNotEmpty) {
       final stillUsed = _devices.value
           .any((d) => d.serialNumber == device.serialNumber && d.isTGDevice);
-      if (!stillUsed) TGService.instance.unwatch(device.serialNumber);
+      if (!stillUsed) TelemetryService.instance.unwatch(device.serialNumber);
     }
     _persist();
   }
@@ -75,6 +75,6 @@ class DeviceStore {
   /// no serial is set.
   ValueNotifier<TGTelemetry?>? telemetryFor(Device device) {
     if (!device.isTGDevice || device.serialNumber.isEmpty) return null;
-    return TGService.instance.watch(device.serialNumber);
+    return TelemetryService.instance.watch(device.serialNumber);
   }
 }

@@ -16,6 +16,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
+.claude/
+
 # Visual Studio Code related
 .vscode/
 

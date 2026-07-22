@@ -1,4 +1,4 @@
-package com.example.fire_prevention
+package com.rainfire.app
 
 import io.flutter.embedding.android.FlutterActivity
 

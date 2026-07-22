@@ -1,0 +1,8 @@
+# Copy to android/key.properties and fill in your release keystore details.
+# Generate a keystore with:
+#   keytool -genkey -v -keystore rainfire-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias rainfire
+# NEVER commit key.properties or the .jks file.
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=rainfire
+storeFile=../rainfire-release.jks

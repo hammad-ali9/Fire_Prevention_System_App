@@ -4,7 +4,7 @@ import '../models/device.dart';
 import '../models/tg_telemetry.dart';
 import '../models/zone.dart';
 import '../services/device_store.dart';
-import '../services/tg_service.dart';
+import '../services/telemetry_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/page_header.dart';
 import '../widgets/status_bar.dart';
@@ -94,7 +94,7 @@ class ZoneDevicesScreen extends StatelessWidget {
                                 onRemove: () =>
                                     DeviceStore.instance.remove(devices[i].id),
                                 onToggleSprinkler: telemetry != null
-                                    ? (active) => TGService.instance
+                                    ? (active) => TelemetryService.instance
                                         .setSprinkler(devices[i].serialNumber,
                                             active: active)
                                     : null,
@@ -435,17 +435,23 @@ class _SprinklerPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    sprinklerOn == null
-                        ? 'Unknown'
-                        : sprinklerOn!
-                            ? 'Active — Water flowing'
-                            : 'Standby',
+                    telemetry.valveCommandPending
+                        ? (telemetry.pendingTargetOn
+                            ? 'Start queued — waiting for device'
+                            : 'Stop queued — waiting for device')
+                        : sprinklerOn == null
+                            ? 'Unknown'
+                            : sprinklerOn!
+                                ? 'Active — Water flowing'
+                                : 'Standby',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: sprinklerOn == true
-                          ? const Color(0xFF0284C7)
-                          : const Color(0xFF0F172B),
+                      color: telemetry.valveCommandPending
+                          ? const Color(0xFFD97706)
+                          : sprinklerOn == true
+                              ? const Color(0xFF0284C7)
+                              : const Color(0xFF0F172B),
                     ),
                   ),
                 ],
@@ -453,24 +459,40 @@ class _SprinklerPanel extends StatelessWidget {
             ),
             if (onToggle != null)
               GestureDetector(
-                onTap: () => onToggle!(!(sprinklerOn ?? false)),
+                onTap: () {
+                  // While a start is queued, the pill cancels it; a queued
+                  // stop just waits for the device.
+                  if (telemetry.valveCommandPending) {
+                    if (telemetry.pendingTargetOn) onToggle!(false);
+                    return;
+                  }
+                  onToggle!(!(sprinklerOn ?? false));
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: sprinklerOn == true
-                        ? const Color(0xFFFFE5E5)
-                        : const Color(0xFFE8F4FD),
+                    color: telemetry.valveCommandPending
+                        ? const Color(0xFFFEF3C7)
+                        : sprinklerOn == true
+                            ? const Color(0xFFFFE5E5)
+                            : const Color(0xFFE8F4FD),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    sprinklerOn == true ? 'Turn Off' : 'Turn On',
+                    telemetry.valveCommandPending
+                        ? (telemetry.pendingTargetOn ? 'Cancel' : 'Queued…')
+                        : sprinklerOn == true
+                            ? 'Turn Off'
+                            : 'Turn On',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: sprinklerOn == true
-                          ? const Color(0xFFBA0C0C)
-                          : const Color(0xFF0284C7),
+                      color: telemetry.valveCommandPending
+                          ? const Color(0xFFD97706)
+                          : sprinklerOn == true
+                              ? const Color(0xFFBA0C0C)
+                              : const Color(0xFF0284C7),
                     ),
                   ),
                 ),
@@ -488,7 +510,31 @@ class _SprinklerPanel extends StatelessWidget {
           const SizedBox(height: 4),
           _MetaRow(
             icon: Icons.battery_5_bar_rounded,
-            text: '${telemetry.batteryVoltage!.toStringAsFixed(2)} V',
+            text: telemetry.batteryPercent == null
+                ? '${telemetry.batteryVoltage!.toStringAsFixed(2)} V'
+                : '${telemetry.batteryVoltage!.toStringAsFixed(2)} V · '
+                    '${telemetry.batteryPercent}%',
+          ),
+        ],
+        if (telemetry.externalVoltage != null) ...[
+          const SizedBox(height: 4),
+          _MetaRow(
+            icon: Icons.power_outlined,
+            text: 'External ${telemetry.externalVoltageLabel}',
+          ),
+        ],
+        if (telemetry.insideTempC != null) ...[
+          const SizedBox(height: 4),
+          _MetaRow(
+            icon: Icons.thermostat_outlined,
+            text: 'Inside ${telemetry.insideTempLabel}',
+          ),
+        ],
+        if (telemetry.cellularSignal != null) ...[
+          const SizedBox(height: 4),
+          _MetaRow(
+            icon: Icons.signal_cellular_alt_rounded,
+            text: 'Signal ${telemetry.cellularSignal}',
           ),
         ],
         if (telemetry.latitude != null && telemetry.longitude != null) ...[

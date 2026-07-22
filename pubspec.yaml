@@ -1,5 +1,5 @@
-name: fire_prevention
-description: "Fire prevention monitoring app."
+name: rainfire
+description: "RainFire — fire prevention and sprinkler monitoring app."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -35,6 +35,7 @@ flutter:
   assets:
     - assets/map.jpg
     - assets/icons/
+    - assets/certs/sectigo_r46.pem
 
   fonts:
     - family: Glory

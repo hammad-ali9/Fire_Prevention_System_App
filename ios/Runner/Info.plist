@@ -11,7 +11,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Fire Prevention</string>
+	<string>RainFire</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>fire_prevention</string>
+	<string>rainfire</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -71,7 +71,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>GIDClientID</key>
-	<string>699348421681-7e0lsldcopm6pf583cgi1luq32jat5dn.apps.googleusercontent.com</string>
+	<string>699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -79,7 +79,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.699348421681-7e0lsldcopm6pf583cgi1luq32jat5dn</string>
+				<string>com.googleusercontent.apps.699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7</string>
 			</array>
 		</dict>
 	</array>

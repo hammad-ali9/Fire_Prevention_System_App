@@ -5,10 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
+import '../models/device.dart';
+import '../models/tg_telemetry.dart';
 import '../models/zone.dart';
 import '../routes/app_routes.dart';
 import '../services/alert_store.dart';
 import '../services/auth_service.dart';
+import '../services/device_store.dart';
+import '../services/telemetry_service.dart';
 import '../services/zone_store.dart';
 import '../theme/app_colors.dart';
 import '../widgets/bottom_nav.dart';
@@ -199,6 +203,7 @@ class _Dashboard extends StatelessWidget {
             ),
           const SizedBox(height: 17),
           _MetricsRow(zone: focus),
+          _ZoneDeviceStatus(zone: focus),
           const SizedBox(height: 28),
           ValueListenableBuilder<List<AppAlert>>(
             valueListenable: AlertStore.instance.alerts,
@@ -273,7 +278,7 @@ class _GreetingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Fire Prevention System',
+                  'RainFire Fire Prevention',
                   style: TextStyle(
                     fontSize: 16,
                     color: Color(0x80565656),
@@ -926,6 +931,480 @@ class _MetricTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Battery level + sprinkler status + manual valve control for the focus
+/// zone's field device. Reads live telemetry from the backend
+/// ([TelemetryService] → Firestore `devices/{serial}`). Renders nothing when
+/// the zone has no TG/DM-connected device.
+class _ZoneDeviceStatus extends StatelessWidget {
+  const _ZoneDeviceStatus({required this.zone});
+  final Zone? zone;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = zone;
+    if (z == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<List<Device>>(
+      valueListenable: DeviceStore.instance.devices,
+      builder: (context, all, _) {
+        Device? device;
+        for (final d in all) {
+          if (d.zoneId == z.id && d.isTGDevice && d.serialNumber.isNotEmpty) {
+            device = d;
+            break;
+          }
+        }
+        if (device == null) return const SizedBox.shrink();
+        final notifier = DeviceStore.instance.telemetryFor(device);
+        if (notifier == null) return const SizedBox.shrink();
+        final dev = device;
+        return ValueListenableBuilder<TGTelemetry?>(
+          valueListenable: notifier,
+          builder: (context, telemetry, _) => Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _DeviceStatusCard(device: dev, telemetry: telemetry),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DeviceStatusCard extends StatelessWidget {
+  const _DeviceStatusCard({required this.device, required this.telemetry});
+  final Device device;
+  final TGTelemetry? telemetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = telemetry;
+    final online = t?.isOnline ?? false;
+    final sprinklerOn = t?.sprinklerActive;
+    final pct = t?.batteryPercent;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFEAEAEA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 31,
+                height: 31,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F4FD),
+                  borderRadius: BorderRadius.circular(15.5),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.water_rounded,
+                    size: 18, color: Color(0xFF0284C7)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Field Device',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF272727),
+                    height: 19 / 16,
+                    letterSpacing: -0.315,
+                  ),
+                ),
+              ),
+              _OnlinePill(isOnline: online, isLoading: t == null),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _StatusMetric(
+                  icon: pct != null && pct <= 20
+                      ? Icons.battery_alert_rounded
+                      : Icons.battery_full_rounded,
+                  iconColor: pct != null && pct <= 20
+                      ? const Color(0xFFE53935)
+                      : const Color(0xFF22AC04),
+                  iconBg: pct != null && pct <= 20
+                      ? const Color(0xFFFFF1F1)
+                      : const Color(0xFFE9F8E9),
+                  label: 'Battery',
+                  value: t?.batteryLabel ?? '—',
+                  sub: pct == null ? null : '$pct%',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatusMetric(
+                  icon: sprinklerOn == true
+                      ? Icons.water_drop_rounded
+                      : Icons.water_drop_outlined,
+                  iconColor: const Color(0xFF0284C7),
+                  iconBg: const Color(0xFFE8F4FD),
+                  label: 'Sprinkler',
+                  value: t?.sprinklerLabel ?? 'Unknown',
+                  sub: sprinklerOn == true ? 'Water flowing' : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SprinklerControlButton(
+            serial: device.serialNumber,
+            telemetry: t,
+          ),
+          if (t?.valveCommandPending == true) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    size: 13, color: Color(0xFFD97706)),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    t!.pendingTargetOn
+                        ? 'Sprinkler will start when the device checks in '
+                            '(usually within an hour)'
+                        : 'Sprinkler will stop when the device checks in '
+                            '(usually within an hour)',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFD97706),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (t?.insideTempC != null || t?.cellularSignal != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (t?.insideTempC != null) ...[
+                  const Icon(Icons.thermostat_outlined,
+                      size: 13, color: Color(0xFF90A1B9)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Inside ${t!.insideTempLabel}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF90A1B9),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+                if (t?.insideTempC != null && t?.cellularSignal != null)
+                  const SizedBox(width: 12),
+                if (t?.cellularSignal != null) ...[
+                  const Icon(Icons.signal_cellular_alt_rounded,
+                      size: 13, color: Color(0xFF90A1B9)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Signal ${t!.cellularSignal}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF90A1B9),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          if (t?.lastSeen != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.access_time_rounded,
+                    size: 13, color: Color(0xFF90A1B9)),
+                const SizedBox(width: 5),
+                Text(
+                  'Last report ${t!.lastSeenLabel}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF90A1B9),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusMetric extends StatelessWidget {
+  const _StatusMetric({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+    this.sub,
+  });
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final String value;
+  final String? sub;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 31,
+          height: 31,
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(15.5),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 17, color: iconColor),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF90A1B9),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF0F172B),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              if (sub != null)
+                Text(
+                  sub!,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF62748E),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OnlinePill extends StatelessWidget {
+  const _OnlinePill({required this.isOnline, required this.isLoading});
+  final bool isOnline;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          'Syncing…',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF90A1B9),
+          ),
+        ),
+      );
+    }
+    final color = isOnline ? const Color(0xFF16A34A) : const Color(0xFFBA0C0C);
+    final bg = isOnline ? const Color(0xFFDCFCE7) : const Color(0xFFFFE5E5);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            isOnline ? 'Online' : 'Offline',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Manual valve control with live command tracking. Four states, derived
+/// from TG telemetry (so they survive app restarts and stay consistent
+/// across phones):
+///
+///   • Idle (valve closed, nothing queued)  → blue  "Activate Sprinkler"
+///   • Activation queued (device not yet in) → amber "Activation Queued —
+///     Tap to Cancel" (cancel releases the queued TG command)
+///   • Running (valve reports Open)          → red   "Stop Sprinkler"
+///   • Stop queued                           → amber "Stop Queued…" (waits
+///     for the device; no clean cancel, so not tappable)
+///
+/// The device applies commands at its next check-in (~hourly), hence the
+/// queued states.
+class _SprinklerControlButton extends StatefulWidget {
+  const _SprinklerControlButton({
+    required this.serial,
+    required this.telemetry,
+  });
+  final String serial;
+  final TGTelemetry? telemetry;
+
+  @override
+  State<_SprinklerControlButton> createState() =>
+      _SprinklerControlButtonState();
+}
+
+class _SprinklerControlButtonState extends State<_SprinklerControlButton> {
+  bool _busy = false;
+
+  bool get _on => widget.telemetry?.sprinklerActive == true;
+  bool get _pending => widget.telemetry?.valveCommandPending == true;
+  bool get _pendingOn => widget.telemetry?.pendingTargetOn == true;
+
+  Future<void> _toggle() async {
+    final t = widget.telemetry;
+    if (_busy || t == null) return;
+    if (_pending && !_pendingOn) return; // stop already queued — just wait
+
+    // Cancelling a queued activation and stopping a running sprinkler are
+    // both "command off"; activating from idle is "command on".
+    final bool cancelling = _pending && _pendingOn;
+    final bool activate = !cancelling && !_on;
+
+    setState(() => _busy = true);
+    final ok = await TelemetryService.instance
+        .setSprinkler(widget.serial, active: activate);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    final messenger = ScaffoldMessenger.of(context);
+    final reason = TelemetryService.instance.lastCommandError;
+    final String successText = cancelling
+        ? 'Activation cancelled'
+        : activate
+            ? 'Activation queued — sprinkler starts at the device\'s '
+                'next check-in'
+            : 'Stop queued — sprinkler stops at the device\'s next check-in';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? successText
+              : 'Command failed'
+                  '${reason == null ? ' — check device connection' : ':\n$reason'}',
+        ),
+        backgroundColor:
+            ok ? const Color(0xFF16A34A) : const Color(0xFFBA0C0C),
+        duration: ok ? const Duration(seconds: 3) : const Duration(seconds: 8),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled =
+        widget.telemetry != null && !(_pending && !_pendingOn);
+
+    final Color bg;
+    final IconData icon;
+    final String label;
+    if (_pending && _pendingOn) {
+      bg = const Color(0xFFD97706); // amber — waiting for device
+      icon = Icons.hourglass_top_rounded;
+      label = 'Activation Queued — Tap to Cancel';
+    } else if (_pending) {
+      bg = const Color(0xFFD97706);
+      icon = Icons.hourglass_top_rounded;
+      label = 'Stop Queued — Waiting for Device';
+    } else if (_on) {
+      bg = const Color(0xFFBA0C0C);
+      icon = Icons.power_settings_new_rounded;
+      label = 'Stop Sprinkler';
+    } else {
+      bg = const Color(0xFF0284C7);
+      icon = Icons.water_drop_rounded;
+      label = 'Activate Sprinkler';
+    }
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: _toggle,
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(61),
+          ),
+          alignment: Alignment.center,
+          child: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.315,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

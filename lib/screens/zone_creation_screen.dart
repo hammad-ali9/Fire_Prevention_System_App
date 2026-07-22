@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../models/device.dart';
 import '../models/zone.dart';
 import '../routes/app_routes.dart';
 import '../services/api_config.dart';
+import '../services/device_store.dart';
 import '../services/geocoding_service.dart';
 import '../services/location_service.dart';
 import '../services/map_config.dart';
@@ -21,6 +23,9 @@ class ZoneCreationScreen extends StatefulWidget {
     super.key,
     this.presetName,
     this.presetCenter,
+    this.deviceSerial,
+    this.deviceRegion,
+    this.deviceType,
   });
 
   /// Pre-filled zone name forwarded from [CreateZoneScreen].
@@ -29,6 +34,13 @@ class ZoneCreationScreen extends StatefulWidget {
   /// Pin coordinate forwarded from the manual-coordinate flow. When set, the
   /// pin is pre-dropped here and the map opens centered on it.
   final LatLng? presetCenter;
+
+  /// When the zone is seeded from a device's live location (the "Add Zone via
+  /// Device" flow), these carry the device identity so it can be registered to
+  /// the new zone once the zone is saved. Null for the manual/map flows.
+  final String? deviceSerial;
+  final String? deviceRegion;
+  final String? deviceType;
 
   @override
   State<ZoneCreationScreen> createState() => _ZoneCreationScreenState();
@@ -111,6 +123,19 @@ class _ZoneCreationScreenState extends State<ZoneCreationScreen> {
       polygon: ZoneStore.defaultPolygonAround(center),
     );
     ZoneStore.instance.addZone(zone);
+    // "Add Zone via Device" flow: attach the seeding device to the new zone so
+    // it starts streaming telemetry immediately. Skip if already registered.
+    final serial = widget.deviceSerial?.trim() ?? '';
+    if (serial.isNotEmpty && !DeviceStore.instance.containsSerial(serial)) {
+      DeviceStore.instance.add(Device(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        zoneId: zone.id,
+        type: widget.deviceType ?? 'gps_tracker',
+        serialNumber: serial,
+        serverRegion: widget.deviceRegion?.trim() ?? '',
+        connector: 'TG',
+      ));
+    }
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,

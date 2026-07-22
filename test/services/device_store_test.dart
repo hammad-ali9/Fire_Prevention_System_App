@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fire_prevention/models/device.dart';
-import 'package:fire_prevention/services/device_store.dart';
+import 'package:rainfire/models/device.dart';
+import 'package:rainfire/services/device_store.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

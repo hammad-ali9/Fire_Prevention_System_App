@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>699348421681-7e0lsldcopm6pf583cgi1luq32jat5dn.apps.googleusercontent.com</string>
+	<string>699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.699348421681-7e0lsldcopm6pf583cgi1luq32jat5dn</string>
+	<string>com.googleusercontent.apps.699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>699348421681-8cch93iqpf5hgkr7q0t8dfhb601rm176.apps.googleusercontent.com</string>
+	<string>699348421681-09rp8esm1cgqudeddr9sjip0jpdlkmp7.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyCQ11TqySpgdLh2WACVW_BvZFpge9rGUqs</string>
 	<key>GCM_SENDER_ID</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.fireprevention</string>
+	<string>com.rainfire.app</string>
 	<key>PROJECT_ID</key>
 	<string>fireprevention-6d950</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:699348421681:ios:048b161bde78b0d4629910</string>
+	<string>1:699348421681:ios:868630c0f6101bc6629910</string>
 </dict>
 </plist>

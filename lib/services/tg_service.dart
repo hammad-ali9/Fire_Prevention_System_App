@@ -167,36 +167,35 @@ class TGService {
 
   // ── Commands ────────────────────────────────────────────────────────────────
 
-  /// Valve ON/OFF via the Device Manager async "Set Digital Output" message
-  /// (MessageType 0x004). The Arrow Global has a single switched-ground output
-  /// (harness Wire 6) = output index 0, so the valve relay is bit b0.
+  /// Valve ON/OFF via the Device Manager async "Immobilise assets" message
+  /// (MessageType 0x0100 = 256) — the client-confirmed control path. The
+  /// device's digital output is configured with Function = Immobiliser, so the
+  /// firmware drives the valve relay from the immobiliser STATE; raw
+  /// "Set Digital Output" (0x004) commands are ignored for that pin.
   ///
-  /// Payload (4 bytes) = [LogicalLevel UINT16 LE][ChangeMask UINT16 LE], sent
-  /// base64-encoded in `Data`:
-  ///   ON  → level bit set,   mask = this output's bit
-  ///   OFF → level bit clear, mask = this output's bit
+  /// Payload = ONE byte, sent as a JSON numeric array in `Data` (per the DM
+  /// doc example — NOT base64):
+  ///   bit 0 = immobiliser on/off, bit 1 = override (locks out Driver ID)
+  ///   [1] → immobilise (output driven)   [0] → release (output idle)
   ///
-  /// ⚠️ NOT YET VERIFIED ON HARDWARE. The DM doc's own byte-order example is
-  /// self-contradictory, and the logical→physical polarity depends on the
-  /// device's active-high system parameter — so ON might map to valve-closed
-  /// until confirmed. DM also cannot read the output back, so verify the actual
-  /// valve change in the Telematics Guru portal after sending. The device must
-  /// be ONLINE; otherwise the command queues until [ExpiryDateUTC] (24h here).
+  /// WARNING — POLARITY NOT YET HARDWARE-VERIFIED: with an active-high install,
+  /// immobilise-ON drives the output → DOut bit 0 = 1 = "Valve position: Open".
+  /// If the first live test shows the valve inverted, flip [_valveOnImmobilises].
+  /// Confirm via the "Valve position" feedback in TG. The device must be ONLINE;
+  /// otherwise the command queues until [ExpiryDateUTC] (24h here).
   Future<bool> setSprinkler(String serial, {required bool active}) async {
-    final data = _setOutputData(on: active, outputIndex: _valveOutputIndex);
+    final immobilise = _valveOnImmobilises ? active : !active;
     final uri = Uri.parse(
       '${ApiConfig.dmBaseUrl}/v1/AsyncMessaging/Send?serial=$serial',
     );
     final body = jsonEncode({
-      'MessageType': 4, // 0x004 = Set Digital Output
-      'CANAddress': 0, // unused for output control (Arrow is non-CAN)
+      'MessageType': 256, // 0x0100 = Immobilise assets via the API
+      'CANAddress': 4294967295, // per the DM 0x0100 doc example
       'ExpiryDateUTC': DateTime.now()
           .toUtc()
           .add(const Duration(hours: 24))
           .toIso8601String(),
-      'SendAfterDateUTC': null,
-      'Flags': 0,
-      'Data': base64Encode(data),
+      'Data': [immobilise ? 1 : 0], // control byte: bit 0 = immobiliser state
     });
 
     final resp = await _client
@@ -220,24 +219,12 @@ class TGService {
     return ok;
   }
 
-  /// Output index wired to the valve relay. Arrow Global exposes one output
-  /// (harness Wire 6) = index 0. Change if the relay is on a different output.
-  static const int _valveOutputIndex = 0;
-
-  /// Builds the 4-byte "Set Digital Output" (0x004) payload:
-  /// [LogicalLevel UINT16 LE][ChangeMask UINT16 LE]. The change mask addresses
-  /// only [outputIndex] so other outputs are left untouched.
-  static List<int> _setOutputData({
-    required bool on,
-    required int outputIndex,
-  }) {
-    final mask = 1 << outputIndex; // apply to this output only
-    final level = on ? mask : 0; // set/clear its bit
-    return [
-      level & 0xFF, (level >> 8) & 0xFF, // logical level, little-endian
-      mask & 0xFF, (mask >> 8) & 0xFF, // change mask, little-endian
-    ];
-  }
+  /// When true, "sprinkler ON" maps to immobilise ACTIVE (output driven →
+  /// valve open on an active-high install). Flip after the first live test if
+  /// the valve responds inverted. Keep in sync with
+  /// [TGApiService.valveOnIsImmobilise] — both paths drive the same
+  /// immobiliser state.
+  static const bool _valveOnImmobilises = true;
 
   void dispose() {
     for (final t in _timers.values) {

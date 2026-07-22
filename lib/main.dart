@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show SecurityContext;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -36,6 +37,19 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    // api.oemserver.com (valve commands) chains to the Sectigo R46 root,
+    // which older Android trust stores don't ship — the handshake fails with
+    // CERTIFICATE_VERIFY_FAILED before any request is sent. Trust the bundled
+    // root explicitly so the DM API works on those phones too.
+    try {
+      final pem = await rootBundle.load('assets/certs/sectigo_r46.pem');
+      SecurityContext.defaultContext
+          .setTrustedCertificatesBytes(pem.buffer.asUint8List());
+    } catch (e) {
+      // Non-fatal: phones with a current trust store don't need the extra
+      // root (and some platforms throw if it's already present).
+      debugPrint('Sectigo R46 root not registered: $e');
+    }
   }
   // Restore persisted state BEFORE runApp so the first frame already sees
   // the user's zones / history / settings instead of an empty UI that then
@@ -55,16 +69,16 @@ Future<void> main() async {
   }
   TelemetrySimulator.instance.start();
   LiveDataService.instance.start();
-  runApp(const FirePreventionApp());
+  runApp(const RainFireApp());
 }
 
-class FirePreventionApp extends StatelessWidget {
-  const FirePreventionApp({super.key});
+class RainFireApp extends StatelessWidget {
+  const RainFireApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Fire Prevention',
+      title: 'RainFire',
       navigatorKey: MakeItRainController.instance.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
@@ -86,6 +100,10 @@ class _AuthGate extends StatelessWidget {
     // when they're ready — they don't get forced into it on launch.
     if (kIsWeb) {
       return const HomeScreen();
+    }
+    // No Firebase app (widget tests) — auth can't resolve, show login.
+    if (Firebase.apps.isEmpty) {
+      return const LoginScreen();
     }
     // Seed the stream with the cached user (populated synchronously by
     // FirebaseAuth after Firebase.initializeApp completed in main). Without

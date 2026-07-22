@@ -24,7 +24,7 @@ class ApiConfig {
   /// No API key. US + territories only — returns 404 elsewhere.
   static const String nwsBase = 'https://api.weather.gov';
   static const String nwsUserAgent =
-      '(MakeItRain-FirePrevention-POC, rajahammad9897@gmail.com)';
+      '(RainFire-App, rajahammad9897@gmail.com)';
 
   // ── NASA FIRMS ─────────────────────────────────────────────────────────
   /// Free MAP_KEY — register at:
@@ -68,6 +68,36 @@ class ApiConfig {
   //
   // POC NOTE: keys are embedded in the binary (acceptable for a POC). For
   // production, proxy them through a backend so they don't ship in the APK.
+  // ── Telematics Guru REST API (primary telemetry path) ──────────────────
+  // TG is Digital Matter's tracking platform; unlike the DM pull API it has
+  // no IP allowlist, exposes decoded I/O (valve position, battery voltage,
+  // temperatures), and works from any network — so it is the app's primary
+  // live-telemetry source. Auth: POST /v1/user/authenticate (form-encoded
+  // username/password) → 24 h bearer token, cached and refreshed by
+  // [TGApiService].
+  //
+  // POC NOTE: credentials are embedded in the binary (acceptable for a POC).
+  // Swap to a generated TG API key (Account → Manage Account → Access) once
+  // the org has the "API Keys" functionality enabled, or proxy through a
+  // backend for production.
+  static const String tgBaseUrl = 'https://api-emea03.telematics.guru';
+  static const String tgUsername = 'masood@onemindigitech.com';
+  static const String tgPassword = 'Masood@234';
+
+  /// TG organisation that owns the POC devices ("Datanet IoT" on EMEA03).
+  static const int tgOrganisationId = 2134;
+
+  /// DM device serial → TG asset id. TG's asset endpoints return
+  /// `deviceSerial: null` for this org, so the mapping cannot be derived at
+  /// runtime; when a serial is missing here [TGApiService] falls back to the
+  /// org's only asset (valid while the fleet has a single active device).
+  static const Map<String, int> tgAssetIdBySerial = {
+    '1429272': 103028, // "00000_Valve Control" (MIR-Valve)
+  };
+
+  /// How often to poll the TG API for fresh telemetry.
+  static const Duration tgPollInterval = Duration(seconds: 30);
+
   static const String dmBaseUrl = 'https://api.oemserver.com';
   static const String dmApiKey =
       '_iv0RqzAmkhwOtUx_0Vee9.IoP7Hddn5D0ypG4B21XoBnnEGV5Mg7iA3z5EafgCJ0Rg.1';

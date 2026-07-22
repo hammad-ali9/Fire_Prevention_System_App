@@ -7,6 +7,7 @@ import '../services/fire_data_store.dart';
 import '../services/risk_engine.dart';
 import '../services/settings_store.dart';
 import '../services/zone_store.dart';
+import '../theme/app_colors.dart';
 import '../widgets/page_header.dart';
 import '../widgets/status_bar.dart';
 
@@ -67,13 +68,44 @@ class EnvironmentalScanScreen extends StatelessWidget {
 class _Empty extends StatelessWidget {
   const _Empty();
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text(
-            'Add a zone to see the environmental scan.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF565656)),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.eco_outlined,
+                    size: 40, color: AppColors.primary),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'No zone to scan',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF272727),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Add a zone to see live telemetry and the '
+                'environmental risk analysis.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0x99565656),
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -83,6 +115,51 @@ class _Body extends StatelessWidget {
   const _Body({required this.zone, required this.settings});
   final Zone zone;
   final AppSettings settings;
+
+  /// Shared card styling — white surface, hairline border, soft lifted shadow.
+  static final BoxDecoration _cardDecoration = BoxDecoration(
+    color: Colors.white,
+    border: Border.all(color: const Color(0xFFF0F0F0)),
+    borderRadius: BorderRadius.circular(20),
+    boxShadow: const [
+      BoxShadow(
+        color: Color(0x0F101828),
+        blurRadius: 20,
+        offset: Offset(0, 8),
+      ),
+    ],
+  );
+
+  /// Section heading with a short forest-green accent bar to the left.
+  static Widget _sectionTitle(String text, {Widget? trailing}) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF272727),
+                  height: 19 / 16,
+                  letterSpacing: -0.315,
+                ),
+              ),
+            ],
+          ),
+          ?trailing,
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -146,29 +223,48 @@ class _Body extends StatelessWidget {
   }
 
   Widget _telemetryCard() => Container(
-        padding: const EdgeInsets.fromLTRB(14, 17, 14, 18),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFEAEAEA)),
-          borderRadius: BorderRadius.circular(19),
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        decoration: _cardDecoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  'Live Telemetry',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF272727),
-                    height: 19 / 16,
-                    letterSpacing: -0.315,
-                  ),
+            _sectionTitle(
+              'Live Telemetry',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: zone.hasLiveWeather
+                      ? const Color(0xFFE9F8E9)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                Icon(Icons.more_horiz, color: Color(0xFF272727), size: 24),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: zone.hasLiveWeather
+                            ? const Color(0xFF22AC04)
+                            : const Color(0xFF90A1B9),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      zone.hasLiveWeather ? 'Live' : 'Simulated',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: zone.hasLiveWeather
+                            ? const Color(0xFF15803D)
+                            : const Color(0xFF62748E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 21),
             Stack(
@@ -241,7 +337,7 @@ class _Body extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Container(height: 1, color: const Color(0xFFEAEAEA)),
+            Container(height: 1, color: const Color(0xFFF1F1F1)),
             const SizedBox(height: 14),
             Row(
               children: [
@@ -342,6 +438,10 @@ class _Body extends StatelessWidget {
               width: c.maxWidth * fraction,
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: gradient),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
               ),
             );
           }),
@@ -349,49 +449,54 @@ class _Body extends StatelessWidget {
       );
 
   Widget _systemAnalysisCard(List<String> reasons) => Container(
-        padding: const EdgeInsets.fromLTRB(14, 17, 14, 0),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFEAEAEA)),
-          borderRadius: BorderRadius.circular(19),
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 4),
+        decoration: _cardDecoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'System Analysis',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF272727),
-                height: 19 / 16,
-                letterSpacing: -0.315,
-              ),
-            ),
-            const SizedBox(height: 19),
-            const Text(
-              'High Risk Due to:',
-              style: TextStyle(
+            _sectionTitle('System Analysis'),
+            const SizedBox(height: 18),
+            Text(
+              '${zone.riskLevel.substring(0, 1)}'
+              '${zone.riskLevel.substring(1).toLowerCase()} risk due to:',
+              style: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF272727),
                 height: 19 / 14,
                 letterSpacing: -0.315,
               ),
             ),
             const SizedBox(height: 5),
-            for (final r in reasons) _reason(r),
+            if (reasons.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'No elevated risk factors detected for this zone.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: const Color(0xFF565656).withValues(alpha: 0.6),
+                    height: 1.4,
+                  ),
+                ),
+              )
+            else
+              for (var i = 0; i < reasons.length; i++)
+                _reason(reasons[i], last: i == reasons.length - 1),
           ],
         ),
       );
 
-  Widget _reason(String text) => Container(
+  Widget _reason(String text, {bool last = false}) => Container(
         height: 43,
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFEAEAEA), width: 1),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: last
+            ? null
+            : const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFF1F1F1), width: 1),
+                ),
+              ),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
           children: [
             const _AsteriskGlyph(size: 9, color: Color(0xFFBA0C0C)),
@@ -456,8 +561,15 @@ class _ProtocolPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(61),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.28),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.symmetric(vertical: 22),
         alignment: Alignment.center,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

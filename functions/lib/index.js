@@ -260,32 +260,54 @@ exports.dmSetOutput = (0, https_2.onCall)({ secrets: [DM_API_KEY], region: "euro
     return { serial, active, queued: true };
 });
 /**
- * Sends an async "set digital output" command to a device via the Device
- * Manager API.
+ * Sends an async "Immobilise assets via the API" (MessageType 0x0100 = 256)
+ * command via the Device Manager async-messaging API — the client-confirmed
+ * control path. The device's digital output is configured with Function =
+ * Immobiliser, so the firmware drives the valve relay from the immobiliser
+ * STATE; raw "Set Digital Output" (0x004) commands are ignored for that pin.
  *
- * ⚠️ FINALIZE the endpoint path + body against the swagger
- *    (api.oemserver.com/swagger) — look for the async output/immobiliser
- *    control endpoint. Fill PRODUCT_ID for Arrow-Global-Bluetooth and confirm
- *    the output index for the valve relay.
+ * Payload = ONE byte, sent as a JSON numeric array in `Data` (per the DM doc
+ * example — NOT base64): bit 0 = immobiliser on/off, bit 1 = override.
+ *   [1] → immobilise (output driven)   [0] → release (output idle)
+ *
+ * The device must be ONLINE to apply the command promptly; otherwise it queues
+ * until [ExpiryDateUTC] (24 h). Confirm the actual valve movement via the
+ * "Valve position" feedback in Telematics Guru after sending (Log Reasons
+ * 38/39 = immobiliser on/off).
+ *
+ * ⚠️ POLARITY NOT YET HARDWARE-VERIFIED: with an active-high install,
+ *    immobilise-ON drives the output → DOut bit 0 = 1 = "Valve position: Open".
+ *    Flip [VALVE_ON_LEVEL] if the first live test shows the valve inverted.
  */
 async function toggleDeviceOutput(serial, active, apiKey) {
-    const PRODUCT_ID = "128"; // Arrow-Global-Bluetooth (Product 128.1) per portal.
-    const OUTPUT_INDEX = 1; // Valve = the single digital output. CONFIRM via swagger.
-    // Placeholder shape — replace path/body with the real async-control endpoint.
-    const url = `${DM_API_BASE}/v1/TrackingDevice/SetOutput` +
-        `?product=${encodeURIComponent(PRODUCT_ID)}&id=${encodeURIComponent(serial)}`;
+    const immobilise = active === VALVE_ON_LEVEL; // polarity toggle (see doc)
+    const url = `${DM_API_BASE}/v1/AsyncMessaging/Send` +
+        `?serial=${encodeURIComponent(serial)}`;
     const resp = await fetch(url, {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({ output: OUTPUT_INDEX, value: active }),
+        body: JSON.stringify({
+            MessageType: 256, //         0x0100 = Immobilise assets via the API
+            CANAddress: 4294967295, //   per the DM 0x0100 doc example
+            ExpiryDateUTC: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+            Data: [immobilise ? 1 : 0], // control byte: bit 0 = immobiliser state
+        }),
     });
-    if (!resp.ok) {
+    const ok = resp.status === 200 || resp.status === 202;
+    if (!ok) {
         logger.error(`toggleDeviceOutput: ${serial} → HTTP ${resp.status} ${await resp.text()}`);
         return false;
     }
+    logger.info(`toggleDeviceOutput: ${serial} valve ${active ? "ON" : "OFF"} queued`);
     return true;
 }
+/**
+ * Maps app "active" → the immobiliser state that turns the valve ON. If the
+ * real install runs inverted (water sprays when the immobiliser RELEASES),
+ * set this to `false` after testing.
+ */
+const VALVE_ON_LEVEL = true;
 //# sourceMappingURL=index.js.map

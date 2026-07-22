@@ -48,7 +48,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   children: [
                     const SizedBox(height: 16),
                     const Text(
-                      'Reset your password 🔑',
+                      'Reset your password',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 26,

@@ -284,7 +284,7 @@ class ReportsScreen extends StatelessWidget {
         .length;
     final activeZone = ZoneStore.instance.activeZone;
     final buf = StringBuffer()
-      ..writeln('Fire Prevention — Report')
+      ..writeln('RainFire — Report')
       ..writeln('Generated: $ts')
       ..writeln('=' * 32)
       ..writeln()

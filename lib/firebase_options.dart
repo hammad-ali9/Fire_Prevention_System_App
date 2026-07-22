@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBt3yOdEgNlalKXVEOyUp8h-EmSZNidGfc',
-    appId: '1:699348421681:android:ae3acbd5b0843b25629910',
+    appId: '1:699348421681:android:b9f4d03f2f553529629910',
     messagingSenderId: '699348421681',
     projectId: 'fireprevention-6d950',
     storageBucket: 'fireprevention-6d950.firebasestorage.app',
@@ -59,12 +59,12 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCQ11TqySpgdLh2WACVW_BvZFpge9rGUqs',
-    appId: '1:699348421681:ios:048b161bde78b0d4629910',
+    appId: '1:699348421681:ios:868630c0f6101bc6629910',
     messagingSenderId: '699348421681',
     projectId: 'fireprevention-6d950',
     storageBucket: 'fireprevention-6d950.firebasestorage.app',
-    iosClientId: '699348421681-7e0lsldcopm6pf583cgi1luq32jat5dn.apps.googleusercontent.com',
-    iosBundleId: 'com.example.fireprevention',
+    iosClientId: '699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7.apps.googleusercontent.com',
+    iosBundleId: 'com.rainfire.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
