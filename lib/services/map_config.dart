@@ -1,9 +1,17 @@
-/// MapTiler tile configuration. Free-tier key used by the POC; swap via env
-/// before shipping production builds.
+/// MapTiler tile configuration.
+///
+/// The API key is injected at build time via
+/// `--dart-define=MAPTILER_KEY=...` (or a `--dart-define-from-file`). The
+/// literal below is only a development fallback — for production builds pass
+/// the key on the command line and restrict it to this app's bundle ID
+/// (`com.rainfire.app`) in the MapTiler dashboard.
 class MapConfig {
   MapConfig._();
 
-  static const String apiKey = 'QMqCIotRfvctwuPTxjIG';
+  static const String apiKey = String.fromEnvironment(
+    'MAPTILER_KEY',
+    defaultValue: 'QMqCIotRfvctwuPTxjIG',
+  );
   static const String styleId = 'streets-v2';
 
   static String tileUrlTemplate() =>
