@@ -24,14 +24,14 @@ class DefaultFirebaseOptions {
         return android;
       case TargetPlatform.iOS:
         return ios;
-      case TargetPlatform.macOS:
-        return macos;
       case TargetPlatform.windows:
         return windows;
+      case TargetPlatform.macOS:
       case TargetPlatform.linux:
         throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
+          'DefaultFirebaseOptions have not been configured for '
+          '$defaultTargetPlatform - you can reconfigure this by running the '
+          'FlutterFire CLI again.',
         );
       default:
         throw UnsupportedError(
@@ -65,16 +65,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'fireprevention-6d950.firebasestorage.app',
     iosClientId: '699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7.apps.googleusercontent.com',
     iosBundleId: 'com.rainfire.app',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCQ11TqySpgdLh2WACVW_BvZFpge9rGUqs',
-    appId: '1:699348421681:ios:562b372937b16a52629910',
-    messagingSenderId: '699348421681',
-    projectId: 'fireprevention-6d950',
-    storageBucket: 'fireprevention-6d950.firebasestorage.app',
-    iosClientId: '699348421681-4v62jnl8ml0fq31d1501vqopchvcb57p.apps.googleusercontent.com',
-    iosBundleId: 'com.example.firePrevention',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

@@ -47,10 +47,10 @@
               "client_type": 3
             },
             {
-              "client_id": "699348421681-4v62jnl8ml0fq31d1501vqopchvcb57p.apps.googleusercontent.com",
+              "client_id": "699348421681-4uq86vq53qav1rv7qhh69hg8i4sll2dt.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.firePrevention"
+                "bundle_id": "com.makeitrainwildfire.RainFire"
               }
             }
           ]
@@ -74,6 +74,30 @@
           }
         },
         {
+          "client_id": "699348421681-hfgmifngnh7aqfmgjp3lk8jcfdfnfipl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rainfire.app",
+            "certificate_hash": "5317a23d8c61e38c7b0ff47c7b8e252a7effc4d2"
+          }
+        },
+        {
+          "client_id": "699348421681-htdtaig3p09jufugh6g0glv7h5dtsauq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rainfire.app",
+            "certificate_hash": "5e0c8cfdfd6e3cfa07fd406c76aac76aa0beec44"
+          }
+        },
+        {
+          "client_id": "699348421681-jhg2erbn3r8eg5d04r9ba46nfror1lbo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rainfire.app",
+            "certificate_hash": "639c17ae8463890ffb54455bf5385089e7c40ad9"
+          }
+        },
+        {
           "client_id": "699348421681-7lqrsqhtiqale6ocs8ah3n9v5d5emgnk.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -91,10 +115,10 @@
               "client_type": 3
             },
             {
-              "client_id": "699348421681-4v62jnl8ml0fq31d1501vqopchvcb57p.apps.googleusercontent.com",
+              "client_id": "699348421681-4uq86vq53qav1rv7qhh69hg8i4sll2dt.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.firePrevention"
+                "bundle_id": "com.makeitrainwildfire.RainFire"
               }
             }
           ]
