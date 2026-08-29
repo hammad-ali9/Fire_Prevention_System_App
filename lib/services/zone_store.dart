@@ -214,4 +214,17 @@ class ZoneStore {
       LatLng(c.latitude - dLat, c.longitude - dLng),
     ];
   }
+
+  /// Forget every zone and its persisted copy. Deactivates first so any
+  /// running zone sends its OFF command to hardware rather than being
+  /// abandoned mid-activation.
+  Future<void> clear() async {
+    deactivateAll();
+    zones.value = [];
+    activeZoneIds.value = <String>[];
+    _sources.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kZonesKey);
+    await prefs.remove(_kActiveIdsKey);
+  }
 }

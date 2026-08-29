@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../routes/app_routes.dart';
+import '../services/alert_store.dart';
 import '../services/auth_service.dart';
+import '../services/device_store.dart';
+import '../services/history_store.dart';
 import '../services/settings_store.dart';
 import '../services/zone_store.dart';
 import '../theme/app_colors.dart';
@@ -234,6 +237,19 @@ class _Form extends StatelessWidget {
               onChanged: null,
             ),
           ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => _confirmDeleteAccount(context),
+            child: const _ToggleRow(
+              icon: Icons.delete_forever_rounded,
+              iconBg: Color(0xFFFEE2E2),
+              iconColor: Color(0xFFBA0C0C),
+              title: 'Delete Account',
+              subtitle: 'Permanently erase your account and data',
+              value: null,
+              onChanged: null,
+            ),
+          ),
           const SizedBox(height: 28),
           _SaveChangesPill(
             onTap: () => ScaffoldMessenger.of(context).showSnackBar(
@@ -278,6 +294,132 @@ Future<void> _confirmSignOut(BuildContext context) async {
   Navigator.of(context).pushNamedAndRemoveUntil(
     AppRoutes.login,
     (route) => false,
+  );
+}
+
+/// Wipe every trace of the signed-out user from this device. Deliberately
+/// separate from [AuthService.deleteAccount] so the auth layer stays unaware
+/// of the stores, matching how sign-out is wired.
+Future<void> _wipeLocalData() async {
+  // Zones first: it deactivates, which sends OFF commands to hardware and
+  // closes history entries, so it must run before history is cleared.
+  await ZoneStore.instance.clear();
+  await DeviceStore.instance.clear();
+  await AlertStore.instance.clear();
+  await HistoryStore.instance.clear();
+  await SettingsStore.instance.clear();
+}
+
+Future<void> _confirmDeleteAccount(BuildContext context) async {
+  final auth = AuthService.instance;
+  final needsPassword = auth.deletionNeedsPassword;
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete account?'),
+      content: Text(
+        needsPassword
+            ? 'This permanently deletes your account and erases your zones, '
+                'devices, alerts and history from this device. This cannot be '
+                'undone.\n\nEnter your password on the next screen to confirm.'
+            : 'This permanently deletes your account and erases your zones, '
+                'devices, alerts and history from this device. This cannot be '
+                'undone.\n\nYou will be asked to sign in once more to confirm.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFBA0C0C)),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+
+  String? password;
+  if (needsPassword) {
+    if (!context.mounted) return;
+    password = await _askPassword(context);
+    // Null means backed out; an empty field is caught by deleteAccount.
+    if (password == null) return;
+  }
+
+  if (!context.mounted) return;
+  // Federated re-auth opens the Apple/Google sheet over this, which is fine —
+  // the barrier only blocks stray taps on the settings list underneath.
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
+  String? error;
+  try {
+    await auth.deleteAccount(password: password);
+  } catch (e) {
+    error = AuthService.describeError(e);
+  }
+
+  if (error == null) {
+    // The account is already gone at this point, so a failing store must not
+    // turn into a "deletion failed" message that strands the user on a signed
+    // -in screen for an account that no longer exists. Log and carry on.
+    try {
+      await _wipeLocalData();
+    } catch (e) {
+      debugPrint('Local data wipe after account deletion failed: $e');
+    }
+  }
+
+  if (!context.mounted) return;
+  Navigator.of(context).pop(); // dismiss the spinner
+
+  if (error != null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    return;
+  }
+
+  Navigator.of(context).pushNamedAndRemoveUntil(
+    AppRoutes.login,
+    (route) => false,
+  );
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Your account has been deleted.')),
+  );
+}
+
+/// Prompt for the current password. Returns null if the user backed out.
+Future<String?> _askPassword(BuildContext context) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Confirm your password'),
+      content: TextField(
+        controller: controller,
+        obscureText: true,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Password'),
+        onSubmitted: (v) => Navigator.pop(ctx, v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, controller.text),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFBA0C0C)),
+          child: const Text('Delete account'),
+        ),
+      ],
+    ),
   );
 }
 

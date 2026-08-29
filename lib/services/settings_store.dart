@@ -108,4 +108,11 @@ class SettingsStore {
     settings.value = mutate(settings.value);
     _persist();
   }
+
+  /// Reset every setting to its default and forget the persisted copy.
+  Future<void> clear() async {
+    settings.value = AppSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kKey);
+  }
 }

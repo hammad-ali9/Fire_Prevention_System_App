@@ -71,4 +71,13 @@ class AlertStore {
           a.status == AlertStatus.acknowledged ||
           a.status == AlertStatus.resolved)
       .length;
+
+  /// Drop every alert and its persisted copy. Used when the account is
+  /// deleted — alerts are user data and must not survive into the next
+  /// sign-in on this device.
+  Future<void> clear() async {
+    alerts.value = [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kKey);
+  }
 }

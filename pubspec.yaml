@@ -1,8 +1,7 @@
 name: rainfire
 description: "RainFire — fire prevention and sprinkler monitoring app."
 publish_to: 'none'
-version: 1.0.0+7
-
+version: 1.0.0+9
 environment:
   sdk: ^3.11.5
 
@@ -22,6 +21,8 @@ dependencies:
   shared_preferences: ^2.3.3
   flutter_local_notifications: ^21.0.0
   flutter_svg: ^2.0.10+1
+  sign_in_with_apple: ^8.1.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

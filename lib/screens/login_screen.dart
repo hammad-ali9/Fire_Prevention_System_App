@@ -62,6 +62,24 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    setState(() => _busy = true);
+    try {
+      final result = await AuthService.instance.signInWithApple();
+      if (!mounted) return;
+      if (result == null) return; // user dismissed the Apple sheet
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _toast(AuthService.describeError(e, provider: 'Apple'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() => _busy = true);
     try {
@@ -74,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _toast(AuthService.describeError(e));
+      _toast(AuthService.describeError(e, provider: 'Google'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -193,19 +211,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        SocialButton(
-                          label: 'Continue with Apple',
-                          iconAsset: SvgPicture.asset(
-                            'assets/icons/apple.svg',
-                            width: 20,
-                            height: 20,
+                        if (AuthService.instance.isAppleSignInSupported) ...[
+                          SocialButton(
+                            label: 'Continue with Apple',
+                            iconAsset: SvgPicture.asset(
+                              'assets/icons/apple.svg',
+                              width: 20,
+                              height: 20,
+                            ),
+                            onPressed: _busy ? null : _signInWithApple,
                           ),
-                          onPressed: _busy
-                              ? null
-                              : () => _toast(
-                                  'Apple sign-in not configured yet.'),
-                        ),
-                        const SizedBox(height: 15),
+                          const SizedBox(height: 15),
+                        ],
                         SocialButton(
                           label: 'Continue with Google',
                           iconAsset: SvgPicture.asset(

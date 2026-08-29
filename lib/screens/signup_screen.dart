@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
@@ -195,6 +196,18 @@ class _SignupScreenState extends State<SignupScreen> {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    if (AuthService.instance.isAppleSignInSupported) ...[
+                      SocialButton(
+                        label: 'Continue with Apple',
+                        iconAsset: SvgPicture.asset(
+                          'assets/icons/apple.svg',
+                          width: 20,
+                          height: 20,
+                        ),
+                        onPressed: _busy ? null : _signUpWithApple,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     SocialButton(
                       label: 'Continue with Google',
                       iconAsset: const Icon(Icons.g_mobiledata_rounded,
@@ -284,6 +297,24 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  Future<void> _signUpWithApple() async {
+    setState(() => _busy = true);
+    try {
+      final result = await AuthService.instance.signInWithApple();
+      if (!mounted) return;
+      if (result == null) return; // user dismissed the Apple sheet
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _toast(AuthService.describeError(e, provider: 'Apple'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() => _busy = true);
     try {
@@ -296,7 +327,7 @@ class _SignupScreenState extends State<SignupScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _toast(AuthService.describeError(e));
+      _toast(AuthService.describeError(e, provider: 'Google'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
