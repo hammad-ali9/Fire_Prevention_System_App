@@ -1,7 +1,7 @@
 name: rainfire
 description: "RainFire — fire prevention and sprinkler monitoring app."
 publish_to: 'none'
-version: 1.0.0+9
+version: 1.0.0+10
 environment:
   sdk: ^3.11.5
 
