@@ -59,12 +59,12 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCQ11TqySpgdLh2WACVW_BvZFpge9rGUqs',
-    appId: '1:699348421681:ios:868630c0f6101bc6629910',
+    appId: '1:699348421681:ios:4ee432bcdee2fd68629910',
     messagingSenderId: '699348421681',
     projectId: 'fireprevention-6d950',
     storageBucket: 'fireprevention-6d950.firebasestorage.app',
-    iosClientId: '699348421681-a2jm6ivjlefkqp92dfkc85vhf2a6kqm7.apps.googleusercontent.com',
-    iosBundleId: 'com.rainfire.app',
+    iosClientId: '699348421681-4uq86vq53qav1rv7qhh69hg8i4sll2dt.apps.googleusercontent.com',
+    iosBundleId: 'com.makeitrainwildfire.RainFire',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

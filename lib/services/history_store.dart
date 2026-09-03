@@ -79,4 +79,12 @@ class HistoryStore {
   void tick() {
     entries.value = List.unmodifiable(entries.value);
   }
+
+  /// Drop every activation entry and its persisted copy. See
+  /// [AlertStore.clear].
+  Future<void> clear() async {
+    entries.value = [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kKey);
+  }
 }

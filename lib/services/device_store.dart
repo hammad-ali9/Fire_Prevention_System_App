@@ -77,4 +77,17 @@ class DeviceStore {
     if (!device.isTGDevice || device.serialNumber.isEmpty) return null;
     return TelemetryService.instance.watch(device.serialNumber);
   }
+
+  /// Forget every device and its persisted copy, stopping any telemetry
+  /// streams first so no socket outlives the account that opened it.
+  Future<void> clear() async {
+    for (final d in _devices.value) {
+      if (d.isTGDevice && d.serialNumber.isNotEmpty) {
+        TelemetryService.instance.unwatch(d.serialNumber);
+      }
+    }
+    _devices.value = [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kKey);
+  }
 }
